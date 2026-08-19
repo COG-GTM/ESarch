@@ -1,0 +1,130 @@
+services:
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: appdb
+      MYSQL_USER: trader
+      MYSQL_PASSWORD: trader
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -proot"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: trader
+      RABBITMQ_DEFAULT_PASS: trader
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  discovery-server:
+    build:
+      context: .
+      dockerfile: docker/discovery-server/Dockerfile
+    environment:
+      SERVER_PORT: 8761
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+    ports:
+      - "8761:8761"
+
+  trader-app:
+    build:
+      context: .
+      dockerfile: docker/trader-app/Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    environment:
+      SPRING_APPLICATION_NAME: trader-app
+      SPRING_PROFILES_ACTIVE: cloud
+      SPRING_CONFIG_LOCATION: classpath:/,classpath:/config/,file:/config/
+      SPRING_CLOUD_BOOTSTRAP_ENABLED: "false"
+      SPRING_CLOUD_ENABLED: "false"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      MANAGEMENT_CLOUDFOUNDRY_ENABLED: "false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/appdb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: trader
+      SPRING_DATASOURCE_PASSWORD: trader
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: trader
+      SPRING_RABBITMQ_PASSWORD: trader
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+      SPRING_CLOUD_SERVICES_REGISTRATIONMETHOD: direct
+      JAVA_OPTS: -Deureka.client.serviceUrl.defaultZone=http://discovery-server:8761/eureka/
+      SERVER_PORT: 8080
+    volumes:
+      - ./deploy/config/trader-app:/config:ro
+    ports:
+      - "8080:8080"
+
+  trading-engine:
+    build:
+      context: .
+      dockerfile: docker/trading-engine/Dockerfile
+    depends_on:
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_started
+    environment:
+      SPRING_APPLICATION_NAME: trading-engine
+      SPRING_PROFILES_ACTIVE: cloud
+      SPRING_CONFIG_LOCATION: classpath:/,classpath:/config/,file:/config/
+      SPRING_CLOUD_BOOTSTRAP_ENABLED: "false"
+      SPRING_CLOUD_ENABLED: "false"
+      SPRING_CLOUD_CONFIG_ENABLED: "false"
+      MANAGEMENT_CLOUDFOUNDRY_ENABLED: "false"
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/enginedb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: trader
+      SPRING_DATASOURCE_PASSWORD: trader
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: trader
+      SPRING_RABBITMQ_PASSWORD: trader
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://discovery-server:8761/eureka/
+      EUREKA_INSTANCE_PREFERIPADDRESS: "true"
+      SPRING_CLOUD_SERVICES_REGISTRATIONMETHOD: direct
+      JAVA_OPTS: -Deureka.client.serviceUrl.defaultZone=http://discovery-server:8761/eureka/
+      SERVER_PORT: 8080
+    volumes:
+      - ./deploy/config/trading-engine:/config:ro
+    ports:
+      - "8081:8080"
+
+  trader-app-ui:
+    build:
+      context: .
+      dockerfile: docker/trader-app-ui/Dockerfile
+    depends_on:
+      - trader-app
+    ports:
+      - "8088:80"
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
