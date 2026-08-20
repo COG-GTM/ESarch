@@ -60,6 +60,13 @@ development dependency. This avoids the memory-heavy MySQL 5.7 initialization
 path in a single-node kind container; the default chart values retain MySQL
 and persistent storage for a non-kind deployment.
 
+## Delivery image tags
+
+The Cloud Build and GitHub Actions pipelines use an immutable commit or build
+identifier by default, while still accepting an explicit image-tag override.
+This avoids the `latest` plus `IfNotPresent` failure mode where a rerun can be
+green without pulling or deploying the newly built image.
+
 ## Real GKE path
 
 For GKE, set `mysql.enabled=false` and `rabbitmq.enabled=false`. When

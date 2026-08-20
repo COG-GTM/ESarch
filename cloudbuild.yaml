@@ -4,7 +4,9 @@ substitutions:
   _CLUSTER: REPLACE_GKE_CLUSTER
   _CLUSTER_LOCATION: REPLACE_CLUSTER_LOCATION
   _NAMESPACE: axon-trader
-  _IMAGE_TAG: latest
+  # Trigger builds use the commit SHA; sourceless/manual builds resolve this
+  # to the unique Cloud Build ID in the just-build-it step below.
+  _IMAGE_TAG: $SHORT_SHA
 
 steps:
 # The original ci/pipeline.yml starts with just-build-it, then has separate
@@ -15,88 +17,114 @@ steps:
   entrypoint: bash
   args:
     - -ceu
-    - echo "delivery trigger accepted"
+    - |
+      IMAGE_TAG="${_IMAGE_TAG}"
+      if [ -z "$IMAGE_TAG" ]; then
+        IMAGE_TAG="$BUILD_ID"
+      fi
+      printf '%s' "$IMAGE_TAG" > /workspace/image-tag
+      echo "delivery trigger accepted with image tag ${IMAGE_TAG}"
 
 - id: build-trading-engine
   waitFor:
     - just-build-it
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - build
-    - -f
-    - docker/trading-engine/Dockerfile
-    - -t
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${_IMAGE_TAG}
-    - .
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker build \
+        -f docker/trading-engine/Dockerfile \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${IMAGE_TAG}" \
+        .
 
 - id: build-trader-app
   waitFor:
     - just-build-it
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - build
-    - -f
-    - docker/trader-app/Dockerfile
-    - -t
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${_IMAGE_TAG}
-    - .
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker build \
+        -f docker/trader-app/Dockerfile \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${IMAGE_TAG}" \
+        .
 
 - id: build-discovery-server
   waitFor:
     - just-build-it
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - build
-    - -f
-    - docker/discovery-server/Dockerfile
-    - -t
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${_IMAGE_TAG}
-    - .
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker build \
+        -f docker/discovery-server/Dockerfile \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${IMAGE_TAG}" \
+        .
 
 - id: build-trader-ui
   waitFor:
     - just-build-it
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - build
-    - -f
-    - docker/trader-app-ui/Dockerfile
-    - -t
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${_IMAGE_TAG}
-    - .
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker build \
+        -f docker/trader-app-ui/Dockerfile \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${IMAGE_TAG}" \
+        .
 
 # These four puts replace the old put: push-to-pcf steps.
 - id: push-trading-engine
   waitFor:
     - build-trading-engine
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - push
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${_IMAGE_TAG}
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${IMAGE_TAG}"
 
 - id: push-trader-app
   waitFor:
     - build-trader-app
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - push
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${_IMAGE_TAG}
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${IMAGE_TAG}"
 
 - id: push-discovery-server
   waitFor:
     - build-discovery-server
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - push
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${_IMAGE_TAG}
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${IMAGE_TAG}"
 
 - id: push-trader-ui
   waitFor:
     - build-trader-ui
   name: gcr.io/cloud-builders/docker
+  entrypoint: bash
   args:
-    - push
-    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${_IMAGE_TAG}
+    - -ceu
+    - |
+      IMAGE_TAG=$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${IMAGE_TAG}"
 
 - id: helm-upgrade
   waitFor:
@@ -115,6 +143,7 @@ steps:
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
+      IMAGE_TAG=$(cat /workspace/image-tag)
       HELM_VERSION=3.17.3
       curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
         -o /tmp/helm.tar.gz
@@ -126,13 +155,13 @@ steps:
         --wait \
         --timeout 10m \
         --set-string images.traderApp.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app" \
-        --set-string images.traderApp.tag="${_IMAGE_TAG}" \
+        --set-string images.traderApp.tag="${IMAGE_TAG}" \
         --set-string images.tradingEngine.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine" \
-        --set-string images.tradingEngine.tag="${_IMAGE_TAG}" \
+        --set-string images.tradingEngine.tag="${IMAGE_TAG}" \
         --set-string images.discoveryServer.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server" \
-        --set-string images.discoveryServer.tag="${_IMAGE_TAG}" \
+        --set-string images.discoveryServer.tag="${IMAGE_TAG}" \
         --set-string images.ui.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui" \
-        --set-string images.ui.tag="${_IMAGE_TAG}"
+        --set-string images.ui.tag="${IMAGE_TAG}"
 
 # Preserve the smoke-test and end-to-end boundaries from the Concourse
 # pipeline. Helm's --wait is the deployment gate; these steps provide the
@@ -153,6 +182,22 @@ steps:
         --project "${PROJECT_ID}"
       kubectl -n "${_NAMESPACE}" rollout status deployment/trading-engine --timeout=120s
 
+- id: smoke-test-discovery-server
+  waitFor:
+    - helm-upgrade
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
+  env:
+    - USE_GKE_GCLOUD_AUTH_PLUGIN=True
+  entrypoint: bash
+  args:
+    - -ceu
+    - |
+      export KUBECONFIG=/workspace/kubeconfig
+      gcloud container clusters get-credentials "${_CLUSTER}" \
+        --location "${_CLUSTER_LOCATION}" \
+        --project "${PROJECT_ID}"
+      kubectl -n "${_NAMESPACE}" rollout status deployment/discovery-server --timeout=120s
+
 - id: smoke-test-trader-app
   waitFor:
     - helm-upgrade
@@ -172,6 +217,7 @@ steps:
 - id: e2e-test
   waitFor:
     - smoke-test-trading-engine
+    - smoke-test-discovery-server
     - smoke-test-trader-app
   name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
   env:
@@ -186,5 +232,8 @@ steps:
         --project "${PROJECT_ID}"
       kubectl -n "${_NAMESPACE}" get pods
       kubectl -n "${_NAMESPACE}" rollout status deployment/trader-app-ui --timeout=120s
+
+options:
+  dynamicSubstitutions: true
 
 timeout: 45m
