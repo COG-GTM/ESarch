@@ -1,0 +1,178 @@
+substitutions:
+  _REGION: REPLACE_REGION
+  _AR_REPOSITORY: REPLACE_ARTIFACT_REGISTRY_REPOSITORY
+  _CLUSTER: REPLACE_GKE_CLUSTER
+  _CLUSTER_LOCATION: REPLACE_CLUSTER_LOCATION
+  _NAMESPACE: axon-trader
+  _IMAGE_TAG: latest
+
+steps:
+# The original ci/pipeline.yml starts with just-build-it, then has separate
+# application build stages. Keep those boundaries visible while replacing
+# cf push with image build, registry push, and Helm deployment.
+- id: just-build-it
+  name: gcr.io/cloud-builders/docker
+  entrypoint: bash
+  args:
+    - -ceu
+    - echo "delivery trigger accepted"
+
+- id: build-trading-engine
+  waitFor:
+    - just-build-it
+  name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -f
+    - docker/trading-engine/Dockerfile
+    - -t
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${_IMAGE_TAG}
+    - .
+
+- id: build-trader-app
+  waitFor:
+    - just-build-it
+  name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -f
+    - docker/trader-app/Dockerfile
+    - -t
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${_IMAGE_TAG}
+    - .
+
+- id: build-discovery-server
+  waitFor:
+    - just-build-it
+  name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -f
+    - docker/discovery-server/Dockerfile
+    - -t
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${_IMAGE_TAG}
+    - .
+
+- id: build-trader-ui
+  waitFor:
+    - just-build-it
+  name: gcr.io/cloud-builders/docker
+  args:
+    - build
+    - -f
+    - docker/trader-app-ui/Dockerfile
+    - -t
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${_IMAGE_TAG}
+    - .
+
+# These four puts replace the old put: push-to-pcf steps.
+- id: push-trading-engine
+  waitFor:
+    - build-trading-engine
+  name: gcr.io/cloud-builders/docker
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${_IMAGE_TAG}
+
+- id: push-trader-app
+  waitFor:
+    - build-trader-app
+  name: gcr.io/cloud-builders/docker
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${_IMAGE_TAG}
+
+- id: push-discovery-server
+  waitFor:
+    - build-discovery-server
+  name: gcr.io/cloud-builders/docker
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${_IMAGE_TAG}
+
+- id: push-trader-ui
+  waitFor:
+    - build-trader-ui
+  name: gcr.io/cloud-builders/docker
+  args:
+    - push
+    - ${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${_IMAGE_TAG}
+
+- id: helm-upgrade
+  waitFor:
+    - push-trading-engine
+    - push-trader-app
+    - push-discovery-server
+    - push-trader-ui
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  entrypoint: bash
+  args:
+    - -ceu
+    - |
+      export KUBECONFIG=/workspace/kubeconfig
+      gcloud container clusters get-credentials "${_CLUSTER}" \
+        --location "${_CLUSTER_LOCATION}" \
+        --project "${PROJECT_ID}"
+      curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      helm upgrade --install axon-trader deploy/helm/axon-trader \
+        --namespace "${_NAMESPACE}" \
+        --create-namespace \
+        --wait \
+        --timeout 10m \
+        --set-string images.traderApp.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app" \
+        --set-string images.traderApp.tag="${_IMAGE_TAG}" \
+        --set-string images.tradingEngine.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine" \
+        --set-string images.tradingEngine.tag="${_IMAGE_TAG}" \
+        --set-string images.discoveryServer.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server" \
+        --set-string images.discoveryServer.tag="${_IMAGE_TAG}" \
+        --set-string images.ui.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui" \
+        --set-string images.ui.tag="${_IMAGE_TAG}"
+
+# Preserve the smoke-test and end-to-end boundaries from the Concourse
+# pipeline. Helm's --wait is the deployment gate; these steps provide the
+# corresponding post-deployment checks.
+- id: smoke-test-trading-engine
+  waitFor:
+    - helm-upgrade
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  entrypoint: bash
+  args:
+    - -ceu
+    - |
+      export KUBECONFIG=/workspace/kubeconfig
+      gcloud container clusters get-credentials "${_CLUSTER}" \
+        --location "${_CLUSTER_LOCATION}" \
+        --project "${PROJECT_ID}"
+      kubectl -n "${_NAMESPACE}" rollout status deployment/trading-engine --timeout=120s
+
+- id: smoke-test-trader-app
+  waitFor:
+    - helm-upgrade
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  entrypoint: bash
+  args:
+    - -ceu
+    - |
+      export KUBECONFIG=/workspace/kubeconfig
+      gcloud container clusters get-credentials "${_CLUSTER}" \
+        --location "${_CLUSTER_LOCATION}" \
+        --project "${PROJECT_ID}"
+      kubectl -n "${_NAMESPACE}" rollout status deployment/trader-app --timeout=120s
+
+- id: e2e-test
+  waitFor:
+    - smoke-test-trading-engine
+    - smoke-test-trader-app
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  entrypoint: bash
+  args:
+    - -ceu
+    - |
+      export KUBECONFIG=/workspace/kubeconfig
+      gcloud container clusters get-credentials "${_CLUSTER}" \
+        --location "${_CLUSTER_LOCATION}" \
+        --project "${PROJECT_ID}"
+      kubectl -n "${_NAMESPACE}" get pods
+      kubectl -n "${_NAMESPACE}" rollout status deployment/trader-app-ui --timeout=120s
+
+timeout: 45m
