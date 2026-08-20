@@ -104,7 +104,9 @@ steps:
     - push-trader-app
     - push-discovery-server
     - push-trader-ui
-  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
+  env:
+    - USE_GKE_GCLOUD_AUTH_PLUGIN=True
   entrypoint: bash
   args:
     - -ceu
@@ -113,7 +115,11 @@ steps:
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
-      curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      HELM_VERSION=3.17.3
+      curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+        -o /tmp/helm.tar.gz
+      tar -xzf /tmp/helm.tar.gz -C /tmp
+      install /tmp/linux-amd64/helm /usr/local/bin/helm
       helm upgrade --install axon-trader deploy/helm/axon-trader \
         --namespace "${_NAMESPACE}" \
         --create-namespace \
@@ -134,7 +140,9 @@ steps:
 - id: smoke-test-trading-engine
   waitFor:
     - helm-upgrade
-  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
+  env:
+    - USE_GKE_GCLOUD_AUTH_PLUGIN=True
   entrypoint: bash
   args:
     - -ceu
@@ -148,7 +156,9 @@ steps:
 - id: smoke-test-trader-app
   waitFor:
     - helm-upgrade
-  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
+  env:
+    - USE_GKE_GCLOUD_AUTH_PLUGIN=True
   entrypoint: bash
   args:
     - -ceu
@@ -163,7 +173,9 @@ steps:
   waitFor:
     - smoke-test-trading-engine
     - smoke-test-trader-app
-  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:slim
+  name: gcr.io/google.com/cloudsdktool/google-cloud-cli:496.0.0
+  env:
+    - USE_GKE_GCLOUD_AUTH_PLUGIN=True
   entrypoint: bash
   args:
     - -ceu
