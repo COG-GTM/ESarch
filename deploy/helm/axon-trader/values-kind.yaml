@@ -1,0 +1,40 @@
+images:
+  traderApp:
+    repository: tas-to-gke-axon-trader-trader-app
+    tag: latest
+  tradingEngine:
+    repository: tas-to-gke-axon-trader-trading-engine
+    tag: latest
+  discoveryServer:
+    repository: tas-to-gke-axon-trader-discovery-server
+    tag: latest
+  ui:
+    repository: tas-to-gke-axon-trader-trader-app-ui
+    tag: latest
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
+javaMaxRamPercentage: "35.0"
+
+mysql:
+  enabled: true
+  image: mariadb:10.6
+  host: mysql
+  persistence:
+    enabled: false
+
+rabbitmq:
+  enabled: true
+  host: rabbitmq
+
+cloudSqlProxy:
+  enabled: false
+
+ingress:
+  enabled: true
+  host: axon-trader.local

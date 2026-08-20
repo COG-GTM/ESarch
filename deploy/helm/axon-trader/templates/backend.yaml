@@ -1,0 +1,227 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "axon-trader.traderAppName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: trader-app
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount.traderApp }}
+  {{- end }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trader-app
+      {{- include "axon-trader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: trader-app
+        {{- include "axon-trader.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: trader-app
+          image: "{{ .Values.images.traderApp.repository }}:{{ .Values.images.traderApp.tag }}"
+          imagePullPolicy: {{ .Values.images.traderApp.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPRING_APPLICATION_NAME
+              value: trader-app
+            {{- include "axon-trader.backendEnv" . | nindent 12 }}
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.appDatabase }}?{{ .Values.database.jdbcQueryParameters }}"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
+                  key: db-username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
+                  key: db-password
+            - name: SERVER_PORT
+              value: "8080"
+          volumeMounts:
+            - name: app-config
+              mountPath: /config/application-cloud.yml
+              subPath: trader-app-application-cloud.yml
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.cloudSqlProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: {{ .Values.cloudSqlProxy.image }}
+          args:
+            - "--structured-logs"
+            - "--port={{ .Values.mysql.port }}"
+            - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            {{- toYaml .Values.cloudSqlProxy.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: axon-trader-config
+      {{- if or .Values.cloudSqlProxy.enabled .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "axon-trader.serviceAccountName" . }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "axon-trader.traderAppName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: trader-app
+spec:
+  selector:
+    app.kubernetes.io/name: trader-app
+    {{- include "axon-trader.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "axon-trader.tradingEngineName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: trading-engine
+spec:
+  replicas: {{ .Values.replicaCount.tradingEngine }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-engine
+      {{- include "axon-trader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+      labels:
+        app.kubernetes.io/name: trading-engine
+        {{- include "axon-trader.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: trading-engine
+          image: "{{ .Values.images.tradingEngine.repository }}:{{ .Values.images.tradingEngine.tag }}"
+          imagePullPolicy: {{ .Values.images.tradingEngine.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SPRING_APPLICATION_NAME
+              value: trading-engine
+            {{- include "axon-trader.backendEnv" . | nindent 12 }}
+            - name: SPRING_DATASOURCE_URL
+              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.engineDatabase }}?{{ .Values.database.jdbcQueryParameters }}"
+            - name: SPRING_DATASOURCE_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
+                  key: db-username
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
+                  key: db-password
+            - name: SERVER_PORT
+              value: "8080"
+          volumeMounts:
+            - name: app-config
+              mountPath: /config/application-cloud.yml
+              subPath: trading-engine-application-cloud.yml
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 6
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.cloudSqlProxy.enabled }}
+        - name: cloud-sql-proxy
+          image: {{ .Values.cloudSqlProxy.image }}
+          args:
+            - "--structured-logs"
+            - "--port={{ .Values.mysql.port }}"
+            - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            {{- toYaml .Values.cloudSqlProxy.resources | nindent 12 }}
+        {{- end }}
+      volumes:
+        - name: app-config
+          configMap:
+            name: axon-trader-config
+      {{- if or .Values.cloudSqlProxy.enabled .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "axon-trader.serviceAccountName" . }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "axon-trader.tradingEngineName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: trading-engine
+spec:
+  selector:
+    app.kubernetes.io/name: trading-engine
+    {{- include "axon-trader.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
