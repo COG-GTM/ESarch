@@ -1,0 +1,224 @@
+name: Axon Trader delivery
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: GCP project ID
+        required: true
+        type: string
+      region:
+        description: Artifact Registry region
+        required: true
+        type: string
+      repository:
+        description: Artifact Registry repository
+        required: true
+        type: string
+      cluster:
+        description: GKE cluster name
+        required: true
+        type: string
+      cluster_location:
+        description: GKE cluster region or zone
+        required: true
+        type: string
+      namespace:
+        description: Kubernetes namespace
+        required: true
+        default: axon-trader
+        type: string
+      image_tag:
+        description: Image tag to publish and deploy
+        required: false
+        default: ''
+        type: string
+      workload_identity_provider:
+        description: GitHub Actions Workload Identity Provider resource
+        required: true
+        type: string
+      service_account:
+        description: GCP service account for delivery
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE_ROOT: ${{ inputs.region }}-docker.pkg.dev/${{ inputs.project_id }}/${{ inputs.repository }}
+  IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+
+jobs:
+  just-build-it:
+    name: just-build-it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: echo "delivery trigger accepted"
+
+  build-images:
+    name: build application images
+    needs: just-build-it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: build-trading-engine
+        run: docker build -f docker/trading-engine/Dockerfile -t "$IMAGE_ROOT/trading-engine:$IMAGE_TAG" .
+      - name: build-trader-app
+        run: docker build -f docker/trader-app/Dockerfile -t "$IMAGE_ROOT/trader-app:$IMAGE_TAG" .
+      - name: build-discovery-server
+        run: docker build -f docker/discovery-server/Dockerfile -t "$IMAGE_ROOT/discovery-server:$IMAGE_TAG" .
+      - name: build-trader-ui
+        run: docker build -f docker/trader-app-ui/Dockerfile -t "$IMAGE_ROOT/trader-app-ui:$IMAGE_TAG" .
+      - name: save images for push stage
+        run: |
+          docker save \
+            "$IMAGE_ROOT/trading-engine:$IMAGE_TAG" \
+            "$IMAGE_ROOT/trader-app:$IMAGE_TAG" \
+            "$IMAGE_ROOT/discovery-server:$IMAGE_TAG" \
+            "$IMAGE_ROOT/trader-app-ui:$IMAGE_TAG" | gzip > "$RUNNER_TEMP/axon-trader-images.tar.gz"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: axon-trader-images
+          path: ${{ runner.temp }}/axon-trader-images.tar.gz
+          retention-days: 1
+
+  push-images:
+    name: push images to Artifact Registry
+    needs: build-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: axon-trader-images
+          path: ${{ runner.temp }}
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker "${{ inputs.region }}-docker.pkg.dev" --quiet
+      - name: load built images
+        run: docker load < "$RUNNER_TEMP/axon-trader-images.tar.gz"
+      - name: push-trading-engine
+        run: docker push "$IMAGE_ROOT/trading-engine:$IMAGE_TAG"
+      - name: push-trader-app
+        run: docker push "$IMAGE_ROOT/trader-app:$IMAGE_TAG"
+      - name: push-discovery-server
+        run: docker push "$IMAGE_ROOT/discovery-server:$IMAGE_TAG"
+      - name: push-trader-ui
+        run: docker push "$IMAGE_ROOT/trader-app-ui:$IMAGE_TAG"
+
+  helm-upgrade:
+    name: helm upgrade
+    needs: push-images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster }}
+          location: ${{ inputs.cluster_location }}
+          project_id: ${{ inputs.project_id }}
+      - uses: azure/setup-helm@v4
+      - name: helm-upgrade
+        run: |
+          helm upgrade --install axon-trader deploy/helm/axon-trader \
+            --namespace "${{ inputs.namespace }}" \
+            --create-namespace \
+            --wait \
+            --timeout 10m \
+            --set-string "images.traderApp.repository=$IMAGE_ROOT/trader-app" \
+            --set-string "images.traderApp.tag=$IMAGE_TAG" \
+            --set-string "images.tradingEngine.repository=$IMAGE_ROOT/trading-engine" \
+            --set-string "images.tradingEngine.tag=$IMAGE_TAG" \
+            --set-string "images.discoveryServer.repository=$IMAGE_ROOT/discovery-server" \
+            --set-string "images.discoveryServer.tag=$IMAGE_TAG" \
+            --set-string "images.ui.repository=$IMAGE_ROOT/trader-app-ui" \
+            --set-string "images.ui.tag=$IMAGE_TAG"
+
+  smoke-test-trading-engine:
+    name: smoke-test-trading-engine
+    needs: helm-upgrade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster }}
+          location: ${{ inputs.cluster_location }}
+          project_id: ${{ inputs.project_id }}
+      - run: kubectl -n "${{ inputs.namespace }}" rollout status deployment/trading-engine --timeout=120s
+
+  smoke-test-discovery-server:
+    name: smoke-test-discovery-server
+    needs: helm-upgrade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster }}
+          location: ${{ inputs.cluster_location }}
+          project_id: ${{ inputs.project_id }}
+      - run: kubectl -n "${{ inputs.namespace }}" rollout status deployment/discovery-server --timeout=120s
+
+  smoke-test-trader-app:
+    name: smoke-test-trader-app
+    needs: helm-upgrade
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster }}
+          location: ${{ inputs.cluster_location }}
+          project_id: ${{ inputs.project_id }}
+      - run: kubectl -n "${{ inputs.namespace }}" rollout status deployment/trader-app --timeout=120s
+
+  e2e-test:
+    name: e2e-test
+    needs:
+      - smoke-test-trading-engine
+      - smoke-test-discovery-server
+      - smoke-test-trader-app
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ inputs.project_id }}
+          workload_identity_provider: ${{ inputs.workload_identity_provider }}
+          service_account: ${{ inputs.service_account }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - uses: google-github-actions/get-gke-credentials@v2
+        with:
+          cluster_name: ${{ inputs.cluster }}
+          location: ${{ inputs.cluster_location }}
+          project_id: ${{ inputs.project_id }}
+      - run: |
+          kubectl -n "${{ inputs.namespace }}" get pods
+          kubectl -n "${{ inputs.namespace }}" rollout status deployment/trader-app-ui --timeout=120s
