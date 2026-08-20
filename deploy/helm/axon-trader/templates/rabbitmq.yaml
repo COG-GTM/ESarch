@@ -30,12 +30,12 @@ spec:
             - name: RABBITMQ_DEFAULT_USER
               valueFrom:
                 secretKeyRef:
-                  name: axon-trader-credentials
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
                   key: rabbitmq-username
             - name: RABBITMQ_DEFAULT_PASS
               valueFrom:
                 secretKeyRef:
-                  name: axon-trader-credentials
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
                   key: rabbitmq-password
           readinessProbe:
             exec:

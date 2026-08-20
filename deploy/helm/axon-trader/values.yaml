@@ -24,8 +24,17 @@ replicaCount:
   discoveryServer: 1
   ui: 1
 
-resources: {}
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 512Mi
 javaMaxRamPercentage: 75.0
+
+secrets:
+  existingName: ""
 
 database:
   username: trader

@@ -50,17 +50,17 @@ spec:
             - name: MYSQL_USER
               valueFrom:
                 secretKeyRef:
-                  name: axon-trader-credentials
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
                   key: db-username
             - name: MYSQL_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: axon-trader-credentials
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
                   key: db-password
             - name: MYSQL_ROOT_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: axon-trader-credentials
+                  name: {{ include "axon-trader.credentialsSecretName" . }}
                   key: mysql-root-password
             - name: MYSQL_INITDB_SKIP_TZINFO
               value: "1"

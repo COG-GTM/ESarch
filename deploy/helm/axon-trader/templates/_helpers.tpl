@@ -12,6 +12,27 @@ app.kubernetes.io/part-of: axon-trader
 {{- define "axon-trader.tradingEngineName" -}}trading-engine{{- end }}
 {{- define "axon-trader.discoveryName" -}}discovery-server{{- end }}
 {{- define "axon-trader.uiName" -}}trader-app-ui{{- end }}
+{{- define "axon-trader.credentialsSecretName" -}}
+{{- if .Values.secrets.existingName -}}
+{{ .Values.secrets.existingName }}
+{{- else -}}
+axon-trader-credentials
+{{- end -}}
+{{- end }}
+
+{{- define "axon-trader.databaseHost" -}}
+{{- if .Values.cloudSqlProxy.enabled -}}
+127.0.0.1
+{{- else -}}
+{{ .Values.mysql.host }}
+{{- end -}}
+{{- end }}
+
+{{- define "axon-trader.validate" -}}
+{{- if and .Values.cloudSqlProxy.enabled .Values.mysql.enabled -}}
+{{- fail "cloudSqlProxy.enabled=true requires mysql.enabled=false; configure exactly one MySQL provider" -}}
+{{- end -}}
+{{- end }}
 
 {{- define "axon-trader.backendEnv" -}}
 - name: SPRING_PROFILES_ACTIVE
@@ -41,12 +62,12 @@ app.kubernetes.io/part-of: axon-trader
 - name: SPRING_RABBITMQ_USERNAME
   valueFrom:
     secretKeyRef:
-      name: axon-trader-credentials
+      name: {{ include "axon-trader.credentialsSecretName" . }}
       key: rabbitmq-username
 - name: SPRING_RABBITMQ_PASSWORD
   valueFrom:
     secretKeyRef:
-      name: axon-trader-credentials
+      name: {{ include "axon-trader.credentialsSecretName" . }}
       key: rabbitmq-password
 - name: SPRING_RABBITMQ_HOST
   value: {{ .Values.rabbitmq.host | quote }}

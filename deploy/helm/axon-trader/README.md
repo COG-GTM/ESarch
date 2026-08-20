@@ -62,13 +62,14 @@ and persistent storage for a non-kind deployment.
 
 ## Real GKE path
 
-For GKE, set `mysql.enabled=false` and `rabbitmq.enabled=false`, set
-`mysql.host` to the Cloud SQL proxy loopback endpoint (the chart's backend
-Deployments add a Cloud SQL Auth Proxy sidecar when
-`cloudSqlProxy.enabled=true`), and point `rabbitmq.host` at the RabbitMQ
-Cluster Operator service or managed RabbitMQ endpoint. Set
-`cloudSqlProxy.instanceConnectionName` to the Cloud SQL instance connection
-name and use a Workload Identity-bound Kubernetes service account.
+For GKE, set `mysql.enabled=false` and `rabbitmq.enabled=false`. When
+`cloudSqlProxy.enabled=true`, the backend datasource host automatically becomes
+`127.0.0.1`, which reaches the Cloud SQL Auth Proxy sidecar. The chart rejects
+configurations that enable both the in-cluster MySQL and the Cloud SQL proxy.
+Point `rabbitmq.host` at the RabbitMQ Cluster Operator service or managed
+RabbitMQ endpoint. Set `cloudSqlProxy.instanceConnectionName` to the Cloud SQL
+instance connection name and use a Workload Identity-bound Kubernetes service
+account.
 
 Example starting point:
 
@@ -79,11 +80,15 @@ helm upgrade --install axon-trader deploy/helm/axon-trader \
   --set rabbitmq.enabled=false \
   --set cloudSqlProxy.enabled=true \
   --set cloudSqlProxy.instanceConnectionName=PROJECT:REGION:INSTANCE \
-  --set cloudSqlProxy.serviceAccountName=axon-trader
+  --set cloudSqlProxy.serviceAccountName=axon-trader \
+  --set secrets.existingName=axon-trader-production
 ```
 
 The Cloud SQL Auth Proxy and Workload Identity establish connectivity, but
 database dump/restore for the Axon event store remains a cutover activity and
-is intentionally not automated by this chart. Store chart credentials in a
-secret manager or an externally managed Secret in production; the default
-values are demo-only credentials for kind.
+is intentionally not automated by this chart. In production, set
+`secrets.existingName` to an externally managed Secret containing the keys
+`db-username`, `db-password`, `rabbitmq-username`, `rabbitmq-password`, and
+`mysql-root-password`; the chart does not create a Secret in that mode. The
+default values leave `secrets.existingName` empty, so demo credentials are
+generated for kind.
