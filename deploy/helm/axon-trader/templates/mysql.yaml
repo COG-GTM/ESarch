@@ -1,0 +1,121 @@
+{{- if .Values.mysql.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+data:
+  01-databases.sql: |
+    CREATE DATABASE IF NOT EXISTS enginedb;
+    GRANT ALL PRIVILEGES ON appdb.* TO 'trader'@'%';
+    GRANT ALL PRIVILEGES ON enginedb.* TO 'trader'@'%';
+    FLUSH PRIVILEGES;
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mysql
+spec:
+  serviceName: mysql
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mysql
+      {{- include "axon-trader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mysql
+        {{- include "axon-trader.selectorLabels" . | nindent 8 }}
+    spec:
+      containers:
+        - name: mysql
+          image: {{ .Values.mysql.image }}
+          {{- if not .Values.mysql.persistence.enabled }}
+          command:
+            - sh
+            - -c
+            - find /var/lib/mysql -mindepth 1 -maxdepth 1 -exec rm -rf {} + && exec /usr/local/bin/docker-entrypoint.sh mysqld --innodb-buffer-pool-size=32M --max-connections=50
+          {{- end }}
+          ports:
+            - name: mysql
+              containerPort: 3306
+          env:
+            - name: MYSQL_DATABASE
+              value: {{ .Values.database.appDatabase | quote }}
+            - name: MYSQL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: axon-trader-credentials
+                  key: db-username
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: axon-trader-credentials
+                  key: db-password
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: axon-trader-credentials
+                  key: mysql-root-password
+            - name: MYSQL_INITDB_SKIP_TZINFO
+              value: "1"
+          startupProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD"]
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "mysqladmin ping -h 127.0.0.1 -uroot -p$MYSQL_ROOT_PASSWORD"]
+            periodSeconds: 10
+          volumeMounts:
+            - name: mysql-data
+              mountPath: /var/lib/mysql
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d/01-databases.sql
+              subPath: 01-databases.sql
+      volumes:
+        - name: mysql-init
+          configMap:
+            name: mysql-init
+        {{- if not .Values.mysql.persistence.enabled }}
+        - name: mysql-data
+          emptyDir: {}
+        {{- end }}
+  {{- if .Values.mysql.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: mysql-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.mysql.storage.size }}
+  {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: mysql
+spec:
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: mysql
+    {{- include "axon-trader.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: mysql
+      port: {{ .Values.mysql.port }}
+      targetPort: mysql
+{{- end }}

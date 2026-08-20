@@ -1,0 +1,6 @@
+apiVersion: v2
+name: axon-trader
+description: Phase-one TAS to GKE deployment for the Axon Trader reference app
+type: application
+version: 0.1.0
+appVersion: "legacy-spring-boot-2.0"

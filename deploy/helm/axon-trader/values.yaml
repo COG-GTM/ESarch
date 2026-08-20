@@ -1,0 +1,83 @@
+imagePullSecrets: []
+
+images:
+  traderApp:
+    repository: tas-to-gke-axon-trader-trader-app
+    tag: latest
+    pullPolicy: IfNotPresent
+  tradingEngine:
+    repository: tas-to-gke-axon-trader-trading-engine
+    tag: latest
+    pullPolicy: IfNotPresent
+  discoveryServer:
+    repository: tas-to-gke-axon-trader-discovery-server
+    tag: latest
+    pullPolicy: IfNotPresent
+  ui:
+    repository: tas-to-gke-axon-trader-trader-app-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+
+replicaCount:
+  traderApp: 1
+  tradingEngine: 1
+  discoveryServer: 1
+  ui: 1
+
+resources: {}
+javaMaxRamPercentage: 75.0
+
+database:
+  username: trader
+  password: trader
+  appDatabase: appdb
+  engineDatabase: enginedb
+
+rabbitmq:
+  enabled: true
+  host: rabbitmq
+  port: 5672
+  username: trader
+  password: trader
+  image: rabbitmq:3.13-management-alpine
+
+mysql:
+  enabled: true
+  image: mysql:5.7
+  host: mysql
+  port: 3306
+  rootPassword: root
+  persistence:
+    enabled: true
+  storage:
+    size: 2Gi
+
+cloudSqlProxy:
+  enabled: false
+  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+  instanceConnectionName: replace-project:replace-region:replace-instance
+  serviceAccountName: axon-trader
+
+eureka:
+  serviceName: discovery-server
+  port: 8761
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  host: axon-trader.local
+  tls: []
+
+autoscaling:
+  enabled: true
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+serviceAccount:
+  create: false
+  name: ""
+
+podSecurityContext: {}
+securityContext: {}

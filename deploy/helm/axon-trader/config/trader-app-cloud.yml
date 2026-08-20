@@ -1,0 +1,30 @@
+# Set the general logging level within the application
+logging:
+  level:
+    org.axonframework: INFO
+    io.pivotal.refarch: DEBUG
+    org.hibernate.SQL: INFO
+    com.zaxxer.hikari: DEBUG
+
+spring:
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+#      maximumPoolSize: 4 # This property controls the maximum size that the pool is allowed to reach, including both idle and in-use connections. Default: 10
+#      minimumIdle: 3 # This property controls the minimum number of idle connections that HikariCP tries to maintain in the pool. Default: same as maximumPoolSize
+      leakDetectionThreshold: 5000
+      connectionTimeout: 30000
+      idleTimeout: 30000 # The minimum allowed value is 10000ms (10 seconds). Default: 600000 (10 minutes)
+      maxLifetime: 30000 # A value of 0 indicates no maximum lifetime (infinite lifetime), subject of course to the idleTimeout setting. Default: 1800000 (30 minutes)
+   
+  jpa:
+    generate-ddl: true
+    show-sql: true
+    database-platform: org.hibernate.dialect.MySQL5InnoDBDialect
+    hibernate:
+      ddl-auto: update
+      use-new-id-generator-mappings: true
+
+your:
+  host:
+    is: "Allard Buijze"
