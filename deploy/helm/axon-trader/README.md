@@ -62,10 +62,11 @@ and persistent storage for a non-kind deployment.
 
 ## Delivery image tags
 
-The Cloud Build and GitHub Actions pipelines use an immutable commit or build
-identifier by default, while still accepting an explicit image-tag override.
-This avoids the `latest` plus `IfNotPresent` failure mode where a rerun can be
-green without pulling or deploying the newly built image.
+The Cloud Build and GitHub Actions pipelines use the full commit SHA as their
+immutable default image tag, with Cloud Build falling back to its unique build
+ID for sourceless/manual builds; an explicit image-tag override is still
+accepted. This avoids the `latest` plus `IfNotPresent` failure mode where a
+rerun can be green without pulling or deploying the newly built image.
 
 ## Real GKE path
 

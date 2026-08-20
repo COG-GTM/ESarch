@@ -4,9 +4,10 @@ substitutions:
   _CLUSTER: REPLACE_GKE_CLUSTER
   _CLUSTER_LOCATION: REPLACE_CLUSTER_LOCATION
   _NAMESPACE: axon-trader
-  # Trigger builds use the commit SHA; sourceless/manual builds resolve this
+  # Both delivery pipelines use the full commit SHA; sourceless/manual builds
+  # resolve this
   # to the unique Cloud Build ID in the just-build-it step below.
-  _IMAGE_TAG: $SHORT_SHA
+  _IMAGE_TAG: $COMMIT_SHA
 
 steps:
 # The original ci/pipeline.yml starts with just-build-it, then has separate
@@ -139,7 +140,7 @@ steps:
   args:
     - -ceu
     - |
-      export KUBECONFIG=/workspace/kubeconfig
+      export KUBECONFIG=/workspace/kubeconfig-helm-upgrade
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
@@ -176,7 +177,7 @@ steps:
   args:
     - -ceu
     - |
-      export KUBECONFIG=/workspace/kubeconfig
+      export KUBECONFIG=/workspace/kubeconfig-smoke-trading-engine
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
@@ -192,7 +193,7 @@ steps:
   args:
     - -ceu
     - |
-      export KUBECONFIG=/workspace/kubeconfig
+      export KUBECONFIG=/workspace/kubeconfig-smoke-discovery-server
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
@@ -208,7 +209,7 @@ steps:
   args:
     - -ceu
     - |
-      export KUBECONFIG=/workspace/kubeconfig
+      export KUBECONFIG=/workspace/kubeconfig-smoke-trader-app
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
@@ -226,7 +227,7 @@ steps:
   args:
     - -ceu
     - |
-      export KUBECONFIG=/workspace/kubeconfig
+      export KUBECONFIG=/workspace/kubeconfig-e2e
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
