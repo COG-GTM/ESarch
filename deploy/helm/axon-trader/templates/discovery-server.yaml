@@ -24,6 +24,10 @@ spec:
           env:
             - name: JAVA_MAX_RAM_PERCENTAGE
               value: {{ .Values.javaMaxRamPercentage | quote }}
+            - name: EUREKA_CLIENT_REGISTER_WITH_EUREKA
+              value: "false"
+            - name: EUREKA_CLIENT_FETCH_REGISTRY
+              value: "false"
           ports:
             - name: http
               containerPort: 8761

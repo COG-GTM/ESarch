@@ -36,6 +36,9 @@ javaMaxRamPercentage: 75.0
 secrets:
   existingName: ""
 
+# The credential defaults below are throwaway demo values for kind/local use.
+# Production installs must set secrets.existingName to an externally managed
+# Secret instead of using these values.
 database:
   username: trader
   password: trader
@@ -66,6 +69,13 @@ cloudSqlProxy:
   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
   instanceConnectionName: replace-project:replace-region:replace-instance
   serviceAccountName: axon-trader
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
 
 eureka:
   serviceName: discovery-server

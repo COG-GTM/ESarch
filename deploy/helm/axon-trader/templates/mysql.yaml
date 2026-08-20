@@ -7,9 +7,9 @@ metadata:
     {{- include "axon-trader.labels" . | nindent 4 }}
 data:
   01-databases.sql: |
-    CREATE DATABASE IF NOT EXISTS enginedb;
-    GRANT ALL PRIVILEGES ON appdb.* TO 'trader'@'%';
-    GRANT ALL PRIVILEGES ON enginedb.* TO 'trader'@'%';
+    CREATE DATABASE IF NOT EXISTS {{ .Values.database.engineDatabase }};
+    GRANT ALL PRIVILEGES ON {{ .Values.database.appDatabase }}.* TO '{{ .Values.database.username }}'@'%';
+    GRANT ALL PRIVILEGES ON {{ .Values.database.engineDatabase }}.* TO '{{ .Values.database.username }}'@'%';
     FLUSH PRIVILEGES;
 ---
 apiVersion: apps/v1

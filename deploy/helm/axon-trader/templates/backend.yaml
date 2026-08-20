@@ -73,10 +73,12 @@ spec:
           image: {{ .Values.cloudSqlProxy.image }}
           args:
             - "--structured-logs"
-            - "--port=3306"
+            - "--port={{ .Values.mysql.port }}"
             - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
           securityContext:
             runAsNonRoot: true
+          resources:
+            {{- toYaml .Values.cloudSqlProxy.resources | nindent 12 }}
         {{- end }}
       volumes:
         - name: app-config
@@ -175,10 +177,12 @@ spec:
           image: {{ .Values.cloudSqlProxy.image }}
           args:
             - "--structured-logs"
-            - "--port=3306"
+            - "--port={{ .Values.mysql.port }}"
             - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
           securityContext:
             runAsNonRoot: true
+          resources:
+            {{- toYaml .Values.cloudSqlProxy.resources | nindent 12 }}
         {{- end }}
       volumes:
         - name: app-config
