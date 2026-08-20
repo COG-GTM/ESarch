@@ -33,6 +33,14 @@ resources:
     memory: 1Gi
 javaMaxRamPercentage: "65.0"
 
+uiResources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
 secrets:
   existingName: ""
 
@@ -69,7 +77,7 @@ cloudSqlProxy:
   enabled: false
   image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
   instanceConnectionName: replace-project:replace-region:replace-instance
-  serviceAccountName: axon-trader
+  serviceAccountName: ""
   resources:
     requests:
       cpu: 10m

@@ -57,6 +57,9 @@ so roughly 200–230Mi is non-heap overhead for these Spring Boot, Axon, Eureka,
 and Hikari services. The 1Gi default leaves room for an approximately 665Mi
 heap; TAS's `memory: 1G` manifest setting was doing this sizing work invisibly.
 `values-kind.yaml` keeps its lower percentage for the constrained kind node.
+The nginx UI uses separate `uiResources` (16Mi requested, 64Mi limited); the
+running Compose UI used about 7MiB, so this leaves modest headroom without
+reserving backend-sized memory on the single-node kind cluster.
 
 ## Kind validation
 
@@ -100,7 +103,9 @@ configurations that enable both the in-cluster MySQL and the Cloud SQL proxy.
 Point `rabbitmq.host` at the RabbitMQ Cluster Operator service or managed
 RabbitMQ endpoint. Set `cloudSqlProxy.instanceConnectionName` to the Cloud SQL
 instance connection name and use a Workload Identity-bound Kubernetes service
-account.
+account. The backend pod service account and the chart's ServiceAccount use one
+helper: an explicit `cloudSqlProxy.serviceAccountName` wins, otherwise
+`serviceAccount.name` (or `axon-trader`) is used.
 
 Example starting point:
 

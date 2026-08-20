@@ -93,8 +93,8 @@ spec:
         - name: app-config
           configMap:
             name: axon-trader-config
-      {{- if .Values.cloudSqlProxy.enabled }}
-      serviceAccountName: {{ .Values.cloudSqlProxy.serviceAccountName }}
+      {{- if or .Values.cloudSqlProxy.enabled .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "axon-trader.serviceAccountName" . }}
       {{- end }}
 ---
 apiVersion: v1
@@ -206,8 +206,8 @@ spec:
         - name: app-config
           configMap:
             name: axon-trader-config
-      {{- if .Values.cloudSqlProxy.enabled }}
-      serviceAccountName: {{ .Values.cloudSqlProxy.serviceAccountName }}
+      {{- if or .Values.cloudSqlProxy.enabled .Values.serviceAccount.create }}
+      serviceAccountName: {{ include "axon-trader.serviceAccountName" . }}
       {{- end }}
 ---
 apiVersion: v1

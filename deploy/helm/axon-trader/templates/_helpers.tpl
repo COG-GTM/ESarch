@@ -20,6 +20,10 @@ axon-trader-credentials
 {{- end -}}
 {{- end }}
 
+{{- define "axon-trader.serviceAccountName" -}}
+{{- default (default "axon-trader" .Values.serviceAccount.name) .Values.cloudSqlProxy.serviceAccountName -}}
+{{- end }}
+
 {{- define "axon-trader.databaseHost" -}}
 {{- if .Values.cloudSqlProxy.enabled -}}
 127.0.0.1
