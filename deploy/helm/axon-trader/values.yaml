@@ -27,11 +27,11 @@ replicaCount:
 resources:
   requests:
     cpu: 100m
-    memory: 256Mi
+    memory: 512Mi
   limits:
     cpu: "1"
-    memory: 512Mi
-javaMaxRamPercentage: "75.0"
+    memory: 1Gi
+javaMaxRamPercentage: "65.0"
 
 secrets:
   existingName: ""

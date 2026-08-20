@@ -48,6 +48,16 @@ subscription-query updates. The constraint applies to the trader-app
 live-update path specifically; the existing HPA remains available as a
 one-flag demo step with `autoscaling.enabled=true`.
 
+### Backend memory sizing
+
+The default backend budget is a `512Mi` request, a `1Gi` limit, and
+`JAVA_MAX_RAM_PERCENTAGE=65.0`. With the constrained kind values, live backend
+pods measured 403Mi and 350Mi against a 512Mi limit even with a 35% heap cap,
+so roughly 200–230Mi is non-heap overhead for these Spring Boot, Axon, Eureka,
+and Hikari services. The 1Gi default leaves room for an approximately 665Mi
+heap; TAS's `memory: 1G` manifest setting was doing this sizing work invisibly.
+`values-kind.yaml` keeps its lower percentage for the constrained kind node.
+
 ## Kind validation
 
 Build images from the repository root, create a kind cluster, and load the
