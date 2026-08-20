@@ -32,6 +32,22 @@ Keep each `deploy/helm/axon-trader/config/*-cloud.yml` copy byte-identical to it
 `deploy/config/*/application-cloud.yml` source: Helm `.Files.Get` only packages
 files inside the chart, so symlinks and `../` paths cannot replace the copies.
 
+### Trader-app live updates and scaling
+
+`autoscaling.enabled` defaults to `false` intentionally. TAS's `instances: 1`
+was a load-bearing application constraint, not merely a resource choice:
+`trader-app` order-book SSE updates are emitted by a JVM-local subscription
+query emitter, while events are consumed by one competing replica. Scaling the
+trader-app live-update path can therefore strand an SSE client on a replica
+that did not consume the event, even though the persisted projection remains
+correct on refresh.
+
+Before enabling the chart's HPA, trader-app needs tracking processors with
+per-replica queues plus a distributed or store-backed mechanism for
+subscription-query updates. The constraint applies to the trader-app
+live-update path specifically; the existing HPA remains available as a
+one-flag demo step with `autoscaling.enabled=true`.
+
 ## Kind validation
 
 Build images from the repository root, create a kind cluster, and load the

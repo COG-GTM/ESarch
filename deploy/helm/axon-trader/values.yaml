@@ -31,7 +31,7 @@ resources:
   limits:
     cpu: "1"
     memory: 512Mi
-javaMaxRamPercentage: 75.0
+javaMaxRamPercentage: "75.0"
 
 secrets:
   existingName: ""
@@ -90,7 +90,7 @@ ingress:
   tls: []
 
 autoscaling:
-  enabled: true
+  enabled: false
   minReplicas: 1
   maxReplicas: 3
   targetCPUUtilizationPercentage: 70
