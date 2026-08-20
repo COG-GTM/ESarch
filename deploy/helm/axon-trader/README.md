@@ -105,7 +105,10 @@ RabbitMQ endpoint. Set `cloudSqlProxy.instanceConnectionName` to the Cloud SQL
 instance connection name and use a Workload Identity-bound Kubernetes service
 account. The backend pod service account and the chart's ServiceAccount use one
 helper: an explicit `cloudSqlProxy.serviceAccountName` wins, otherwise
-`serviceAccount.name` (or `axon-trader`) is used.
+`serviceAccount.name` (or `axon-trader`) is used. Note that `mysql.port` stays
+in play while `mysql.enabled=false`: it is both the loopback port the proxy
+sidecar binds and the port the backend datasource URL dials, so the two cannot
+disagree.
 
 Example starting point:
 
