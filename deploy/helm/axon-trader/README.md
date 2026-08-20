@@ -26,6 +26,8 @@ The UI image contains the nginx configuration from branch one. Its same-origin
 `/query` and `/command` proxy target is intentionally the fixed Kubernetes
 Service name `trader-app`; changing that name requires rebuilding the UI image.
 The `/query` proxy has buffering disabled for the order-book SSE endpoint.
+ConfigMap-backed files use `subPath`, so Kubernetes does not live-update them;
+the chart's ConfigMap checksum annotation rolls each workload on `helm upgrade`.
 
 ## Kind validation
 
@@ -92,3 +94,9 @@ is intentionally not automated by this chart. In production, set
 `mysql-root-password`; the chart does not create a Secret in that mode. The
 default values leave `secrets.existingName` empty, so demo credentials are
 generated for kind.
+
+The default JDBC parameters use `useSSL=false`: kind's in-cluster MySQL path is
+plain TCP, while the Cloud SQL Auth Proxy encrypts its outbound Cloud SQL
+connection and the backend-to-proxy hop is local loopback. Set
+`database.jdbcQueryParameters` for a TLS-capable MySQL endpoint; in-cluster
+RabbitMQ is also plain TCP unless separately configured for TLS.

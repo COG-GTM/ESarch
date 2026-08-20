@@ -15,14 +15,24 @@ spec:
       {{- include "axon-trader.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app.kubernetes.io/name: trader-app
         {{- include "axon-trader.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: trader-app
           image: "{{ .Values.images.traderApp.repository }}:{{ .Values.images.traderApp.tag }}"
           imagePullPolicy: {{ .Values.images.traderApp.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080
@@ -31,7 +41,7 @@ spec:
               value: trader-app
             {{- include "axon-trader.backendEnv" . | nindent 12 }}
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.appDatabase }}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.appDatabase }}?{{ .Values.database.jdbcQueryParameters }}"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -61,8 +71,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 6
           livenessProbe:
-            httpGet:
-              path: /actuator/health
+            tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10
@@ -119,14 +128,24 @@ spec:
       {{- include "axon-trader.selectorLabels" . | nindent 6 }}
   template:
     metadata:
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
       labels:
         app.kubernetes.io/name: trading-engine
         {{- include "axon-trader.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: trading-engine
           image: "{{ .Values.images.tradingEngine.repository }}:{{ .Values.images.tradingEngine.tag }}"
           imagePullPolicy: {{ .Values.images.tradingEngine.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - name: http
               containerPort: 8080
@@ -135,7 +154,7 @@ spec:
               value: trading-engine
             {{- include "axon-trader.backendEnv" . | nindent 12 }}
             - name: SPRING_DATASOURCE_URL
-              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.engineDatabase }}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+              value: "jdbc:mysql://{{ include "axon-trader.databaseHost" . }}:{{ .Values.mysql.port }}/{{ .Values.database.engineDatabase }}?{{ .Values.database.jdbcQueryParameters }}"
             - name: SPRING_DATASOURCE_USERNAME
               valueFrom:
                 secretKeyRef:
@@ -165,8 +184,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 6
           livenessProbe:
-            httpGet:
-              path: /actuator/health
+            tcpSocket:
               port: http
             initialDelaySeconds: 30
             periodSeconds: 10

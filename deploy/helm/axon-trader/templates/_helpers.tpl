@@ -10,7 +10,7 @@ app.kubernetes.io/part-of: axon-trader
 
 {{- define "axon-trader.traderAppName" -}}trader-app{{- end }}
 {{- define "axon-trader.tradingEngineName" -}}trading-engine{{- end }}
-{{- define "axon-trader.discoveryName" -}}discovery-server{{- end }}
+{{- define "axon-trader.discoveryName" -}}{{ .Values.eureka.serviceName }}{{- end }}
 {{- define "axon-trader.uiName" -}}trader-app-ui{{- end }}
 {{- define "axon-trader.credentialsSecretName" -}}
 {{- if .Values.secrets.existingName -}}

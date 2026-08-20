@@ -17,10 +17,18 @@ spec:
         app.kubernetes.io/name: discovery-server
         {{- include "axon-trader.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: discovery-server
           image: "{{ .Values.images.discoveryServer.repository }}:{{ .Values.images.discoveryServer.tag }}"
           imagePullPolicy: {{ .Values.images.discoveryServer.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           env:
             - name: JAVA_MAX_RAM_PERCENTAGE
               value: {{ .Values.javaMaxRamPercentage | quote }}

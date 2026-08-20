@@ -17,10 +17,18 @@ spec:
         app.kubernetes.io/name: trader-app-ui
         {{- include "axon-trader.selectorLabels" . | nindent 8 }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: trader-app-ui
           image: "{{ .Values.images.ui.repository }}:{{ .Values.images.ui.tag }}"
           imagePullPolicy: {{ .Values.images.ui.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           ports:
             - name: http
               containerPort: 80

@@ -44,6 +44,7 @@ database:
   password: trader
   appDatabase: appdb
   engineDatabase: enginedb
+  jdbcQueryParameters: "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
 
 rabbitmq:
   enabled: true
