@@ -5,8 +5,7 @@ substitutions:
   _CLUSTER_LOCATION: REPLACE_CLUSTER_LOCATION
   _NAMESPACE: axon-trader
   # Both delivery pipelines use the full commit SHA; sourceless/manual builds
-  # resolve this
-  # to the unique Cloud Build ID in the just-build-it step below.
+  # resolve to the unique Cloud Build ID in the just-build-it step below.
   _IMAGE_TAG: $COMMIT_SHA
 
 steps:
