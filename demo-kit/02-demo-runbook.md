@@ -26,7 +26,7 @@ Helm PR, and the running UI.
 Show that this is a real TAS application, not a Kubernetes sample wearing a costume:
 
 - `trading-engine/manifest.yml` — `java_buildpack`, `health-check-type: port`, `instances: 1`, and
-  five bound services: `enginedb`, `rabbit`, `config`, `registry`.
+  four bound services: `enginedb`, `rabbit`, `config`, `registry`.
 - `deploy-backend.sh` — `cf push --random-route`, then `cf add-network-policy` in both directions.
 - `ci/pipeline.yml` — Concourse with a `put: push-to-pcf` step.
 - Search the repo for `spring.datasource` and find **nothing**. The credentials live in
