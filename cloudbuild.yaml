@@ -19,11 +19,11 @@ steps:
     - -ceu
     - |
       IMAGE_TAG="${_IMAGE_TAG}"
-      if [ -z "$IMAGE_TAG" ]; then
+      if [ -z "$${IMAGE_TAG}" ]; then
         IMAGE_TAG="$BUILD_ID"
       fi
-      printf '%s' "$IMAGE_TAG" > /workspace/image-tag
-      echo "delivery trigger accepted with image tag ${IMAGE_TAG}"
+      printf '%s' "$${IMAGE_TAG}" > /workspace/image-tag
+      echo "delivery trigger accepted with image tag $${IMAGE_TAG}"
 
 - id: build-trading-engine
   waitFor:
@@ -33,10 +33,10 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
+      IMAGE_TAG=$$(cat /workspace/image-tag)
       docker build \
         -f docker/trading-engine/Dockerfile \
-        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${IMAGE_TAG}" \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:$${IMAGE_TAG}" \
         .
 
 - id: build-trader-app
@@ -47,10 +47,10 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
+      IMAGE_TAG=$$(cat /workspace/image-tag)
       docker build \
         -f docker/trader-app/Dockerfile \
-        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${IMAGE_TAG}" \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:$${IMAGE_TAG}" \
         .
 
 - id: build-discovery-server
@@ -61,10 +61,10 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
+      IMAGE_TAG=$$(cat /workspace/image-tag)
       docker build \
         -f docker/discovery-server/Dockerfile \
-        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${IMAGE_TAG}" \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:$${IMAGE_TAG}" \
         .
 
 - id: build-trader-ui
@@ -75,10 +75,10 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
+      IMAGE_TAG=$$(cat /workspace/image-tag)
       docker build \
         -f docker/trader-app-ui/Dockerfile \
-        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${IMAGE_TAG}" \
+        -t "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:$${IMAGE_TAG}" \
         .
 
 # These four puts replace the old put: push-to-pcf steps.
@@ -90,8 +90,8 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
-      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:${IMAGE_TAG}"
+      IMAGE_TAG=$$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine:$${IMAGE_TAG}"
 
 - id: push-trader-app
   waitFor:
@@ -101,8 +101,8 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
-      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:${IMAGE_TAG}"
+      IMAGE_TAG=$$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app:$${IMAGE_TAG}"
 
 - id: push-discovery-server
   waitFor:
@@ -112,8 +112,8 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
-      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:${IMAGE_TAG}"
+      IMAGE_TAG=$$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server:$${IMAGE_TAG}"
 
 - id: push-trader-ui
   waitFor:
@@ -123,8 +123,8 @@ steps:
   args:
     - -ceu
     - |
-      IMAGE_TAG=$(cat /workspace/image-tag)
-      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:${IMAGE_TAG}"
+      IMAGE_TAG=$$(cat /workspace/image-tag)
+      docker push "${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui:$${IMAGE_TAG}"
 
 - id: helm-upgrade
   waitFor:
@@ -143,9 +143,9 @@ steps:
       gcloud container clusters get-credentials "${_CLUSTER}" \
         --location "${_CLUSTER_LOCATION}" \
         --project "${PROJECT_ID}"
-      IMAGE_TAG=$(cat /workspace/image-tag)
+      IMAGE_TAG=$$(cat /workspace/image-tag)
       HELM_VERSION=3.17.3
-      curl -fsSL "https://get.helm.sh/helm-v${HELM_VERSION}-linux-amd64.tar.gz" \
+      curl -fsSL "https://get.helm.sh/helm-v$${HELM_VERSION}-linux-amd64.tar.gz" \
         -o /tmp/helm.tar.gz
       tar -xzf /tmp/helm.tar.gz -C /tmp
       install /tmp/linux-amd64/helm /usr/local/bin/helm
@@ -155,13 +155,13 @@ steps:
         --wait \
         --timeout 10m \
         --set-string images.traderApp.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app" \
-        --set-string images.traderApp.tag="${IMAGE_TAG}" \
+        --set-string images.traderApp.tag="$${IMAGE_TAG}" \
         --set-string images.tradingEngine.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trading-engine" \
-        --set-string images.tradingEngine.tag="${IMAGE_TAG}" \
+        --set-string images.tradingEngine.tag="$${IMAGE_TAG}" \
         --set-string images.discoveryServer.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/discovery-server" \
-        --set-string images.discoveryServer.tag="${IMAGE_TAG}" \
+        --set-string images.discoveryServer.tag="$${IMAGE_TAG}" \
         --set-string images.ui.repository="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_AR_REPOSITORY}/trader-app-ui" \
-        --set-string images.ui.tag="${IMAGE_TAG}"
+        --set-string images.ui.tag="$${IMAGE_TAG}"
 
 # Preserve the smoke-test and end-to-end boundaries from the Concourse
 # pipeline. Helm's --wait is the deployment gate; these steps provide the
