@@ -28,6 +28,9 @@ Service name `trader-app`; changing that name requires rebuilding the UI image.
 The `/query` proxy has buffering disabled for the order-book SSE endpoint.
 ConfigMap-backed files use `subPath`, so Kubernetes does not live-update them;
 the chart's ConfigMap checksum annotation rolls each workload on `helm upgrade`.
+Keep each `deploy/helm/axon-trader/config/*-cloud.yml` copy byte-identical to its
+`deploy/config/*/application-cloud.yml` source: Helm `.Files.Get` only packages
+files inside the chart, so symlinks and `../` paths cannot replace the copies.
 
 ## Kind validation
 
