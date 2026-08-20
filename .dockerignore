@@ -1,0 +1,7 @@
+.git
+.gitignore
+**/target
+trader-app-ui/node_modules
+trader-app-ui/build
+*.log
+demo-kit
