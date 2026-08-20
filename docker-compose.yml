@@ -59,6 +59,9 @@ services:
       SPRING_APPLICATION_NAME: trader-app
       SPRING_PROFILES_ACTIVE: cloud
       SPRING_CONFIG_LOCATION: classpath:/,classpath:/config/,file:/config/
+      # Keep these off-platform: spring.cloud.enabled=false disables the SCS
+      # Connectors scan (otherwise CloudException with no CF); config/bootstrap
+      # flags disable Config Server lookup and the bootstrap context.
       SPRING_CLOUD_BOOTSTRAP_ENABLED: "false"
       SPRING_CLOUD_ENABLED: "false"
       SPRING_CLOUD_CONFIG_ENABLED: "false"
@@ -95,6 +98,9 @@ services:
       SPRING_APPLICATION_NAME: trading-engine
       SPRING_PROFILES_ACTIVE: cloud
       SPRING_CONFIG_LOCATION: classpath:/,classpath:/config/,file:/config/
+      # Keep these off-platform: spring.cloud.enabled=false disables the SCS
+      # Connectors scan (otherwise CloudException with no CF); config/bootstrap
+      # flags disable Config Server lookup and the bootstrap context.
       SPRING_CLOUD_BOOTSTRAP_ENABLED: "false"
       SPRING_CLOUD_ENABLED: "false"
       SPRING_CLOUD_CONFIG_ENABLED: "false"
