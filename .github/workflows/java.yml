@@ -1,0 +1,56 @@
+name: java
+
+on:
+  pull_request:
+    paths-ignore:
+      - "infra/**"
+      - "trader-app-ui/**"
+      - "**/*.md"
+  push:
+    branches: [master]
+    paths-ignore:
+      - "infra/**"
+      - "trader-app-ui/**"
+      - "**/*.md"
+
+permissions:
+  contents: read
+
+# ./mvnw pins Maven 3.5.4: spring-cloud-contract-maven-plugin 2.0.0 fails to load on the runner's Maven 3.9
+# (ClassNotFoundException org.eclipse.aether.impl.SyncContextFactory).
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Unit tests (Java 8)
+        run: ./mvnw -B test
+
+  kubernetes-profile:
+    # Both apps on SPRING_PROFILES_ACTIVE=kubernetes against docker-compose.yml with only env vars, Flyway + validate,
+    # health/Prometheus, and orders/portfolios unchanged across a restart; once from the jars, once from the Jib images.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Build jars and Jib images
+        run: ./mvnw -B -DskipTests package jib:dockerBuild
+      - name: verify-kubernetes-profile.sh (jars)
+        run: ESARCH_RESET=1 ci/local/verify-kubernetes-profile.sh
+      - name: verify-kubernetes-profile.sh (Jib images)
+        run: ESARCH_RESET=1 ESARCH_RUNTIME=image LOGS=target/verify-kubernetes-image ci/local/verify-kubernetes-profile.sh
+      - name: App logs
+        if: always()
+        run: tail -n 200 target/verify-kubernetes*/*.log || true
+      - name: Stop compose
+        if: always()
+        run: docker compose down -v
