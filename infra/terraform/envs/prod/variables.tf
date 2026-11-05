@@ -109,3 +109,15 @@ variable "gateway_hostnames" {
   description = "Hostnames served by the Gateway with a Google-managed certificate; the first one serves the hello-world smoke test on staging."
   type        = list(string)
 }
+
+variable "cloudsql_instance_names" {
+  description = "Cloud SQL instances charted on the service dashboards; empty charts every instance in the project."
+  type        = list(string)
+  default     = []
+}
+
+variable "alert_notification_emails" {
+  description = "Email addresses notified by the alert policies (pod restarts, 5xx rate, queue backlog)."
+  type        = list(string)
+  default     = []
+}

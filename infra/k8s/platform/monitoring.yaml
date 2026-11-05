@@ -1,0 +1,71 @@
+# Google Managed Service for Prometheus (managed collection, enabled on the cluster by the gke
+# Terraform module) replaces TAS Loggregator metrics. The labels used here are the ones the
+# Cloud Monitoring dashboards and alert policies of infra/terraform/modules/observability query.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: axon-trader-services
+  labels:
+    app.kubernetes.io/part-of: axon-trader
+spec:
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - trader-app
+          - trading-engine
+  endpoints:
+    # Spring Boot Actuator + micrometer-registry-prometheus (added with the p3 services).
+    - port: 8080
+      path: /actuator/prometheus
+      interval: 30s
+  targetLabels:
+    fromPod:
+      - from: app.kubernetes.io/name
+        to: service
+---
+# RabbitMQ's rabbitmq_prometheus plugin; /metrics/per-object exposes per-queue depth
+# (rabbitmq_queue_messages_ready / _unacked with a `queue` label) for the queue-backlog alert.
+# Matches the pods of a RabbitMQ Cluster Operator cluster in this namespace.
+apiVersion: monitoring.googleapis.com/v1
+kind: PodMonitoring
+metadata:
+  name: rabbitmq
+  labels:
+    app.kubernetes.io/part-of: axon-trader
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: rabbitmq
+  endpoints:
+    - port: 15692
+      path: /metrics/per-object
+      interval: 30s
+---
+# The namespace denies ingress by default; let the managed collectors scrape the metrics ports.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-managed-prometheus-scrape
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: Exists
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - key: kubernetes.io/metadata.name
+                operator: In
+                values:
+                  - gmp-system
+                  - gke-gmp-system
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 15692

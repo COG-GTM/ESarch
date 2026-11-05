@@ -29,6 +29,12 @@ gke_deletion_protection = true
 # DNS names served by the Gateway (Google-managed certificate). Point each at the gateway_address output.
 gateway_hostnames = ["trader.example.com"]
 
+# Observability: Cloud SQL instances on the dashboards (empty = all) and alert recipients.
+cloudsql_instance_names   = []
+alert_notification_emails = [
+  # "axon-trader-oncall@example.com",
+]
+
 labels = {
   team = "REPLACE_WITH_TEAM"
 }
