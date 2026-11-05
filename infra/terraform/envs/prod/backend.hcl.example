@@ -1,0 +1,2 @@
+# Copy to backend.hcl (git-ignored) and run: terraform init -backend-config=backend.hcl
+bucket = "REPLACE_WITH_STATE_BUCKET"

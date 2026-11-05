@@ -1,0 +1,24 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. No real ids belong in this file.
+project_id = "REPLACE_WITH_STAGING_PROJECT_ID"
+region     = "us-central1"
+
+subnet_cidr   = "10.10.0.0/20"
+pods_cidr     = "10.12.0.0/16"
+services_cidr = "10.13.0.0/20"
+
+artifact_registry_immutable_tags  = false
+artifact_registry_cleanup_dry_run = true
+
+kubernetes_namespace                  = "axon-trader"
+enable_gke_workload_identity_bindings = false
+
+wif_pool_id       = "esarch-ci-staging"
+github_repository = "COG-GTM/ESarch"
+# gh api repos/<owner>/<name> --jq '.id, .owner.id'
+github_repository_id       = "REPLACE_WITH_NUMERIC_REPOSITORY_ID"
+github_repository_owner_id = "REPLACE_WITH_NUMERIC_OWNER_ID"
+ci_allowed_refs   = []
+
+labels = {
+  team = "REPLACE_WITH_TEAM"
+}

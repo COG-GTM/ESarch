@@ -1,0 +1,3 @@
+project_id  = "REPLACE_WITH_STATE_PROJECT_ID"
+bucket_name = "REPLACE_WITH_GLOBALLY_UNIQUE_BUCKET_NAME"
+location    = "US"
