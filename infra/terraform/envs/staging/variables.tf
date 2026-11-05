@@ -121,3 +121,39 @@ variable "alert_notification_emails" {
   type        = list(string)
   default     = []
 }
+
+variable "cloudsql_tier" {
+  description = "Cloud SQL machine tier."
+  type        = string
+  default     = "db-custom-1-3840"
+}
+
+variable "cloudsql_availability_type" {
+  description = "Cloud SQL availability: ZONAL or REGIONAL (HA standby)."
+  type        = string
+  default     = "ZONAL"
+}
+
+variable "cloudsql_disk_size_gb" {
+  description = "Initial Cloud SQL SSD size in GB (auto-resize is on)."
+  type        = number
+  default     = 10
+}
+
+variable "cloudsql_point_in_time_recovery_enabled" {
+  description = "Enable binary logs for point-in-time recovery."
+  type        = bool
+  default     = false
+}
+
+variable "cloudsql_retained_backups" {
+  description = "Number of automated daily backups kept."
+  type        = number
+  default     = 7
+}
+
+variable "cloudsql_deletion_protection" {
+  description = "Block deletion of the Cloud SQL instance."
+  type        = bool
+  default     = true
+}

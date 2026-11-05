@@ -1,0 +1,16 @@
+# cert-manager, rendered from the upstream chart (pinned) with `kustomize build --enable-helm`.
+# Required by the RabbitMQ Cluster Operator (its webhook and metrics certificates); apply it,
+# then addons/rabbitmq-operator.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: cert-manager
+resources:
+  - namespace.yaml
+helmCharts:
+  - name: cert-manager
+    repo: oci://quay.io/jetstack/charts
+    version: v1.20.5
+    releaseName: cert-manager
+    namespace: cert-manager
+    includeCRDs: true
+    valuesFile: values.yaml

@@ -77,3 +77,34 @@ module "observability" {
 
   depends_on = [module.foundation]
 }
+
+module "backing_services" {
+  source = "../../modules/backing-services"
+
+  project_id        = var.project_id
+  region            = var.region
+  environment       = local.environment
+  network_self_link = module.foundation.network_self_link
+
+  user_password_secrets = {
+    "trader-app"     = module.foundation.secret_names["trader-app-db-password"]
+    "trading-engine" = module.foundation.secret_names["trading-engine-db-password"]
+  }
+  admin_password_secret    = module.foundation.secret_names["cloudsql-admin-password"]
+  rabbitmq_password_secret = module.foundation.secret_names["rabbitmq-password"]
+
+  tier                           = var.cloudsql_tier
+  availability_type              = var.cloudsql_availability_type
+  disk_size_gb                   = var.cloudsql_disk_size_gb
+  point_in_time_recovery_enabled = var.cloudsql_point_in_time_recovery_enabled
+  retained_backups               = var.cloudsql_retained_backups
+  deletion_protection            = var.cloudsql_deletion_protection
+
+  labels = merge(var.labels, {
+    app         = "axon-trader"
+    environment = local.environment
+  })
+
+  # The private services access peering (foundation network) must exist before the instance.
+  depends_on = [module.foundation]
+}

@@ -1,0 +1,157 @@
+# Resolves trading-engine-db-password and rabbitmq-password (modules/backing-services) through
+# the trading-engine store. Check: kubectl -n axon-trader get externalsecret backing-services-check
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: backing-services-check
+  namespace: axon-trader
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: gcp-sm-trading-engine
+  target:
+    name: backing-services-check
+    creationPolicy: Owner
+  data:
+    - secretKey: mysql-password
+      remoteRef:
+        key: trading-engine-db-password
+    - secretKey: rabbitmq-password
+      remoteRef:
+        key: rabbitmq-password
+---
+# Connects as trading-engine to enginedb (write + read) and publishes/consumes 100 messages on
+# RabbitMQ. Check: kubectl -n axon-trader wait --for=condition=complete job/backing-services-check
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: backing-services-check
+  namespace: axon-trader
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backing-services-check
+    spec:
+      serviceAccountName: trading-engine
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        # Native sidecar: started first, stopped when the checks finish.
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.27.0
+          restartPolicy: Always
+          args:
+            - CLOUDSQL_INSTANCE_CONNECTION_NAME
+            - --private-ip
+            - --port=3306
+            - --health-check
+            - --http-address=0.0.0.0
+          startupProbe:
+            httpGet:
+              path: /startup
+              port: 9090
+            periodSeconds: 2
+            failureThreshold: 30
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: mysql
+          image: mysql:8.0.46
+          command:
+            - sh
+            - -ec
+            - |
+              # Retry for up to 5 minutes while the database (or the stand-in) comes up.
+              for i in $(seq 1 60); do
+                mysql --connect-timeout=5 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${MYSQL_DATABASE}" -e "SELECT 1" >/dev/null 2>&1 && break
+                [ "${i}" -lt 60 ] || { echo "mysql: unreachable"; exit 1; }
+                sleep 5
+              done
+              # Persistent write on a kept table owned by this check; rows left by an interrupted run are cleared first.
+              mysql --connect-timeout=10 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${MYSQL_DATABASE}" -e "
+                SELECT CURRENT_USER() AS user, DATABASE() AS db, VERSION() AS version;
+                CREATE TABLE IF NOT EXISTS backing_services_check (
+                  probe VARCHAR(253) PRIMARY KEY, checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+                DELETE FROM backing_services_check;
+                INSERT INTO backing_services_check (probe) VALUES ('${HOSTNAME}');
+                SELECT COUNT(*) AS rows_written FROM backing_services_check WHERE probe = '${HOSTNAME}';
+                DELETE FROM backing_services_check WHERE probe = '${HOSTNAME}';"
+              # Each workload user must be confined to its own database (scripts/cloudsql-grants.sh).
+              # Only ERROR 1044 counts as denied; MySQL also answers 1044 for a missing database
+              # the user has no grant on, so cloudsql-grants.sh checks that both databases exist.
+              out="$(mysql --connect-timeout=10 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${OTHER_DATABASE}" -e "SELECT 1" 2>&1)" && {
+                echo "mysql: ${MYSQL_USER} can open ${OTHER_DATABASE}; run scripts/cloudsql-grants.sh"; exit 1; }
+              case "${out}" in
+                "ERROR 1044 "*) echo "mysql: ${MYSQL_USER} denied on ${OTHER_DATABASE}" ;;
+                *) echo "mysql: ${OTHER_DATABASE} probe failed: ${out}"; exit 1 ;;
+              esac
+              echo "mysql: OK"
+          env:
+            - name: MYSQL_HOST
+              value: 127.0.0.1
+            - name: MYSQL_USER
+              value: trading-engine
+            - name: MYSQL_DATABASE
+              value: enginedb
+            - name: OTHER_DATABASE
+              value: appdb
+            - name: MYSQL_PWD
+              valueFrom:
+                secretKeyRef:
+                  name: backing-services-check
+                  key: mysql-password
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+          securityContext:
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+        - name: rabbitmq
+          image: pivotalrabbitmq/perf-test:2.25.0
+          command:
+            - sh
+            - -ec
+            - |
+              # Publish and consume 100 persistent messages; retry for up to 5 minutes while the
+              # broker comes up.
+              for i in $(seq 1 60); do
+                java -jar /perf_test/perf-test.jar \
+                  --uri "amqp://axon-trader:${RABBITMQ_PASSWORD}@rabbitmq.axon-trader.svc.cluster.local:5672/%2f" \
+                  --queue backing-services-check --producers 1 --consumers 1 \
+                  --pmessages 100 --cmessages 100 --flag persistent && { echo "rabbitmq: OK"; exit 0; }
+                sleep 5
+              done
+              echo "rabbitmq: unreachable"
+              exit 1
+          env:
+            - name: RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: backing-services-check
+                  key: rabbitmq-password
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+          securityContext:
+            # The image's perf-test user; the jar is readable by it only.
+            runAsUser: 2000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]

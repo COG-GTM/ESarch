@@ -48,6 +48,11 @@ output "secret_ids" {
   value       = module.secrets.secret_ids
 }
 
+output "secret_names" {
+  description = "Secret Manager resource names (projects/<number>/secrets/<id>) keyed by secret id."
+  value       = module.secrets.secret_names
+}
+
 output "ci_workload_identity_provider" {
   description = "workload_identity_provider input for google-github-actions/auth."
   value       = module.ci_workload_identity.provider_name

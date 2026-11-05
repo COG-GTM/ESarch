@@ -5,6 +5,8 @@ resources:
   - ../../platform
 components:
   - ../../components/smoke
+  - ../../components/rabbitmq
+  - ../../components/backing-services-check
   - ../../components/cluster-env
 configMapGenerator:
   - name: cluster-env

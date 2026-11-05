@@ -1,0 +1,31 @@
+# The namespace denies ingress by default (platform/networkpolicy.yaml). Allow AMQP and the
+# management API from pods in axon-trader, the management API from the operator, and all
+# traffic between the broker nodes (epmd, inter-node, CLI). The Managed Prometheus scrape of
+# :15692 is allowed by allow-managed-prometheus-scrape in platform/monitoring.yaml.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rabbitmq
+  namespace: axon-trader
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}
+      ports:
+        - port: 5672
+        - port: 15672
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: rabbitmq-system
+      ports:
+        - port: 15672
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rabbitmq
