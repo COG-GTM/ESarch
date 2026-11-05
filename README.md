@@ -183,16 +183,32 @@ cf network-policies
 
 You should see that each is empty. If not, use the PWS dashboard UI at [run.pivotal.io][18] to clear things manually or use the cf-cli's `cf help -a" command to find and execute the commands you need.
 
-### [Optional] Running Axon Trader Locally
+### [Optional] Running Axon Trader Locally (off TAS)
 
-You can run the Axon Trader locally on your desktop without Pivotal Cloud Foundry, but the instructions for this are beyond the scope of this tutorial, but here are a few hints to get you started:-
+The `local` Spring profile plus `docker-compose.yml` run the whole Axon Trader on a laptop with no Pivotal/TAS services. Compose stands in for the TAS-bound services (MySQL 5.7 for `enginedb`/`appdb`, RabbitMQ 3.7 for `rabbit`, the `discovery-server` Eureka for `registry`); the `local` profile switches off the Spring Cloud Services config client (`spring.cloud.config.enabled=false`) and points both apps at those containers. Nothing in the TAS manifests, `bootstrap.properties` or `application.properties` changes, so behaviour on TAS is untouched.
 
-- You need RabbitMQ running in the background (we use Docker for this).
-- The Axon Trader backend microservices will default to using an in memory database if none is provided.
-- The local configuration is used and basic configuration is provided (very handy).
-- You'll need Spring Cloud Registry running in the background, see the `discovery-server` folder for a quickstart app.
-- You'll need [Node.js][16] and `npm install` to build the frontend and `npm start` to run it.
-- There are some sample Postman calls for the backend in the file `ESArchSmokeTest.postman_collection.json`
+Prerequisites: JDK 8, Docker with Compose v2, Node.js (20 is known to work) with `npm`, plus `curl` and `jq` for the smoke script.
+
+```bash
+# 1. Build and test (JDK 8)
+./mvnw clean verify
+(cd trader-app-ui && npm ci && CI=true npm test)
+
+# 2. Backing services: MySQL 5.7 (:3306), RabbitMQ 3.7 (:5672, UI on :15672), Eureka discovery-server (:8761)
+docker compose up -d --build --wait
+
+# 3. Backend apps, each in its own terminal (trading-engine on :8081, trader-app on :8080)
+SPRING_PROFILES_ACTIVE=local java -jar trading-engine/target/trading-engine.jar
+SPRING_PROFILES_ACTIVE=local java -jar trader-app/target/trader-app.jar
+
+# 4. UI on :3000, calling trader-app on :8080 (the default when served from localhost)
+(cd trader-app-ui && REACT_APP_API_ROOT=http://localhost:8080 npm start)
+
+# 5. Smoke test: newman collection, ci/tasks/e2e-test-both-sides.sh, then a matched buy/sell checked in the portfolio view
+ci/local/verify-local.sh
+```
+
+The backends bind to `127.0.0.1` only (the local profile has no auth in front of the trading API; set `ESARCH_BIND_ADDRESS` to change it). `ci/local/verify-local.sh` exits non-zero if newman, the e2e script or the portfolio check fails. It waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
 
 ## CQRS & Event Sourcing Architectural Overview
 

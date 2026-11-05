@@ -1,0 +1,56 @@
+# Local, off-TAS stand-ins for the TAS marketplace services Axon Trader binds to
+# (see docs/migration/tas-inventory.md): MySQL for SVC-1/SVC-2, RabbitMQ for SVC-3
+# and the repo's own Eureka discovery-server for SVC-4. There is no Config Server
+# (SVC-5): the `local` Spring profile turns the config client off instead.
+#
+# Build the jars first (./mvnw -B -DskipTests package), then:
+#   docker compose up -d --build
+# and start trading-engine / trader-app with SPRING_PROFILES_ACTIVE=local.
+# Values below are throwaway local defaults; override them with environment variables.
+services:
+  mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${ESARCH_MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_USER: ${ESARCH_MYSQL_USER:-trader}
+      MYSQL_PASSWORD: ${ESARCH_MYSQL_PASSWORD:-trader}
+    ports:
+      - "127.0.0.1:${ESARCH_MYSQL_PORT:-3306}:3306"
+    volumes:
+      - ./docker/mysql/initdb:/docker-entrypoint-initdb.d:ro
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  rabbitmq:
+    image: rabbitmq:3.7-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${ESARCH_RABBITMQ_USER:-trader}
+      RABBITMQ_DEFAULT_PASS: ${ESARCH_RABBITMQ_PASSWORD:-trader}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  discovery-server:
+    build: ./discovery-server
+    environment:
+      EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
+      EUREKA_CLIENT_FETCH_REGISTRY: "false"
+    ports:
+      - "127.0.0.1:8761:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8761/actuator/health || curl -sf http://localhost:8761/ > /dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  mysql-data:
