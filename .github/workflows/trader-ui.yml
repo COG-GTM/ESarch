@@ -1,0 +1,47 @@
+name: trader-ui
+
+on:
+  pull_request:
+    paths:
+      - "trader-app-ui/**"
+      - "docker/local-proxy/**"
+      - "docker-compose.yml"
+      - "ci/local/smoke-ui-image.sh"
+      - ".github/workflows/trader-ui.yml"
+  push:
+    branches: [master]
+    paths:
+      - "trader-app-ui/**"
+      - "docker/local-proxy/**"
+      - "docker-compose.yml"
+      - "ci/local/smoke-ui-image.sh"
+      - ".github/workflows/trader-ui.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trader-app-ui
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: trader-app-ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+        env:
+          CI: "true"
+      - run: npm run build
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the UI image and check it behind the local reverse proxy
+        run: ci/local/smoke-ui-image.sh

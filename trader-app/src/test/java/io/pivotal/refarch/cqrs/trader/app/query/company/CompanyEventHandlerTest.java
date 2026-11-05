@@ -12,6 +12,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.junit4.SpringRunner;
 
 import java.util.List;
+import java.util.Optional;
 
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.*;
@@ -65,7 +66,7 @@ public class CompanyEventHandlerTest {
         testView.setAmountOfShares(AMOUNT_OF_SHARES);
         testView.setTradeStarted(false);
 
-        when(companyViewRepository.getOne(testCompanyId.getIdentifier())).thenReturn(testView);
+        when(companyViewRepository.findById(testCompanyId.getIdentifier())).thenReturn(Optional.of(testView));
 
         CompanyView result = testSubject.find(new CompanyByIdQuery(testCompanyId));
 
@@ -74,7 +75,7 @@ public class CompanyEventHandlerTest {
 
     @Test
     public void testFindCompanyByIdReturnsNullForNonExistingCompanyId() {
-        when(companyViewRepository.getOne(testCompanyId.getIdentifier())).thenReturn(null);
+        when(companyViewRepository.findById(testCompanyId.getIdentifier())).thenReturn(Optional.empty());
 
         Assert.assertNull(testSubject.find(new CompanyByIdQuery(testCompanyId)));
     }

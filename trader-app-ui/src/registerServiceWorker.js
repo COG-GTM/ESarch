@@ -108,10 +108,21 @@ function checkValidServiceWorker(swUrl) {
     });
 }
 
+// getRegistrations() rather than serviceWorker.ready: ready never resolves for a registration that has no
+// active worker (e.g. one stuck installing), so that worker would never be removed. Only this app's scope is
+// touched, so workers of other apps on the same origin stay registered.
 export function unregister() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(registration => {
-      registration.unregister();
-    });
+    const appScope = new URL(`${process.env.PUBLIC_URL}/`, window.location.href).href;
+    return navigator.serviceWorker
+      .getRegistrations()
+      .then(registrations =>
+        Promise.all(
+          registrations
+            .filter(registration => registration.scope === appScope)
+            .map(registration => registration.unregister())
+        )
+      );
   }
+  return Promise.resolve();
 }

@@ -1,0 +1,37 @@
+# Local stand-in for the GKE Ingress planned in s3.5: one origin, `/` -> trader-ui, `/api/command/` and `/api/query/`
+# -> trader-app with the /api prefix stripped. Everything else under /api (actuator, the Axon cluster endpoints)
+# stays unreachable, as on the Ingress (docs/migration/tas-gke-mapping.md CHG-12).
+# Rendered by the nginx image entrypoint (envsubst of the ESARCH_* variables set in docker-compose.yml).
+server {
+    listen 127.0.0.1:${ESARCH_PROXY_PORT};
+    server_name _;
+    server_tokens off;
+
+    location ~ ^/api/(command|query)/ {
+        rewrite ^/api/(.*)$ /$1 break;
+        proxy_pass http://127.0.0.1:${ESARCH_TRADER_APP_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
+        # Order book updates are a server-sent event stream (/query/subscribe/order-book/<id>).
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 1h;
+    }
+
+    # Plain prefix (not ^~) so the regex location above still wins for /api/command/ and /api/query/.
+    location /api/ {
+        default_type application/json;
+        return 404 '{"error":"not routed"}\n';
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:${ESARCH_UI_PORT};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

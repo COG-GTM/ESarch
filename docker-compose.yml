@@ -10,6 +10,9 @@
 # or run the trading-engine and trader-app images too (the `apps` profile):
 #   docker compose --profile apps up -d --wait
 # ESARCH_IMAGE_TAG picks the image tag (default `latest`; Jib also tags each build with the short git SHA).
+# The nginx UI image and a local reverse proxy that stands in for the GKE Ingress come with the `apps` profile,
+# or with the `ui` profile on their own when trading-engine / trader-app run as jars:
+#   docker compose --profile ui up -d --build --wait   ->  http://localhost:8088 (UI at /, trader-app at /api)
 # Values below are throwaway local defaults; override them with environment variables.
 services:
   mysql:
@@ -109,6 +112,34 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 30
+
+  trader-ui:
+    profiles: ["ui", "apps"]
+    build: ./trader-app-ui
+    image: axon-trader/trader-ui:local
+    ports:
+      - "127.0.0.1:${ESARCH_UI_PORT:-8090}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/healthz"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Host networking so the proxy reaches trader-app, which the local profile binds to 127.0.0.1 on the host
+  # (Linux; on Docker Desktop turn on host networking in Settings > Resources > Network).
+  edge-proxy:
+    profiles: ["ui", "apps"]
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    network_mode: host
+    environment:
+      ESARCH_PROXY_PORT: ${ESARCH_PROXY_PORT:-8088}
+      ESARCH_UI_PORT: ${ESARCH_UI_PORT:-8090}
+      ESARCH_TRADER_APP_PORT: ${ESARCH_TRADER_APP_PORT:-8080}
+    volumes:
+      - ./docker/local-proxy/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      trader-ui:
+        condition: service_healthy
 
 volumes:
   mysql-data:
