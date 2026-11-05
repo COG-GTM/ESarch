@@ -52,7 +52,8 @@ On TAS the engine ran one instance (APP-1), and the chart keeps it that way: wit
 trades. The buy/sell sagas run on a subscribing processor, so a saga started on pod A (by `Start*TransactionCommand`,
 routed by transaction id) is only committed after `ReserveItemsCommand` (routed by portfolio id) already ran on pod B,
 whose saga manager finds no saga for the resulting `ItemsReservedEvent`; the sell is never confirmed and the trade
-never matches. `ci/kind/verify-axon-routing.sh` still proves command routing and failover with two engine replicas
+never matches. The engine Deployment uses `strategy: Recreate` so a rollout never overlaps two engine pods either
+(commands fail during the restart instead). `ci/kind/verify-axon-routing.sh` still proves command routing and failover with two engine replicas
 (`--set trading-engine.replicaCount=2`); scaling the engine for real needs the sagas on a tracking processor first.
 `trader-app` (no sagas) scales with its HPA.
 
