@@ -1,0 +1,10 @@
+# Application configuration for the axon-trader namespace (ConfigMaps + ExternalSecrets). The Helm chart (s3.5)
+# templates these per environment; the Deployments consume them with envFrom (see README.md).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: axon-trader
+resources:
+  - trader-app/configmap.yaml
+  - trader-app/externalsecret.yaml
+  - trading-engine/configmap.yaml
+  - trading-engine/externalsecret.yaml
