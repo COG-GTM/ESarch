@@ -4,11 +4,13 @@
 locals {
   name = "${var.name_prefix}-${var.environment}"
 
-  # Entry names must be unique and <= 63 chars: readable hostname prefix + hash of the full hostname.
+  # Entry names must be unique and <= 63 chars: "<name>-<hostname slice>-<8-char hash of hostname>".
+  # The slice gets what is left of the budget (>= 14 chars given the name_prefix/environment limits).
+  certificate_map_entry_host_len = 63 - length(local.name) - 10
   certificate_map_entry_names = {
-    for host in var.hostnames : host => format("%s-%s-%s",
+    for host in toset(var.hostnames) : host => format("%s-%s-%s",
       local.name,
-      replace(substr(replace(host, ".", "-"), 0, 30), "/-+$/", ""),
+      replace(substr(replace(host, ".", "-"), 0, local.certificate_map_entry_host_len), "/-+$/", ""),
       substr(sha256(host), 0, 8),
     )
   }

@@ -70,6 +70,29 @@ run "certificate_map_entry_names_unique_and_bounded" {
   }
 }
 
+run "entry_names_bounded_with_longest_prefix" {
+  command = plan
+
+  variables {
+    name_prefix = "customer-production-abc"
+    environment = "staging-longenv"
+    hostnames = [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com",
+    ]
+  }
+
+  assert {
+    condition     = alltrue([for e in google_certificate_manager_certificate_map_entry.gateway : can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", e.name))])
+    error_message = "Entry names must stay <= 63 chars for the longest allowed prefix and environment."
+  }
+
+  assert {
+    condition     = length(google_certificate_manager_certificate_map_entry.gateway) == 1
+    error_message = "Duplicate hostnames must collapse to one entry."
+  }
+}
+
 run "rejects_empty_hostnames" {
   command = plan
 

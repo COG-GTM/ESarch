@@ -6,12 +6,22 @@ variable "project_id" {
 variable "environment" {
   description = "Environment name; used in resource names."
   type        = string
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{0,14}$", var.environment))
+    error_message = "environment must be lowercase, start with a letter and be at most 15 characters."
+  }
 }
 
 variable "name_prefix" {
   description = "Prefix for resource names."
   type        = string
   default     = "esarch"
+
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{0,22}$", var.name_prefix))
+    error_message = "name_prefix must be lowercase, start with a letter and be at most 23 characters."
+  }
 }
 
 variable "hostnames" {
