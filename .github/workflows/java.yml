@@ -16,6 +16,8 @@ on:
 permissions:
   contents: read
 
+# ./mvnw pins Maven 3.5.4: spring-cloud-contract-maven-plugin 2.0.0 fails to load on the runner's Maven 3.9
+# (ClassNotFoundException org.eclipse.aether.impl.SyncContextFactory).
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -27,7 +29,7 @@ jobs:
           java-version: "8"
           cache: maven
       - name: Unit tests (Java 8)
-        run: mvn -B test
+        run: ./mvnw -B test
 
   kubernetes-profile:
     # Both apps on SPRING_PROFILES_ACTIVE=kubernetes against docker-compose.yml with only env vars, Flyway + validate,
@@ -41,7 +43,7 @@ jobs:
           java-version: "8"
           cache: maven
       - name: Build jars and Jib images
-        run: mvn -B -DskipTests package jib:dockerBuild
+        run: ./mvnw -B -DskipTests package jib:dockerBuild
       - name: verify-kubernetes-profile.sh (jars)
         run: ESARCH_RESET=1 ci/local/verify-kubernetes-profile.sh
       - name: verify-kubernetes-profile.sh (Jib images)
