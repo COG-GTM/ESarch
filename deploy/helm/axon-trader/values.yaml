@@ -1,0 +1,111 @@
+imagePullSecrets: []
+
+images:
+  traderApp:
+    repository: tas-to-gke-axon-trader-trader-app
+    tag: latest
+    pullPolicy: IfNotPresent
+  tradingEngine:
+    repository: tas-to-gke-axon-trader-trading-engine
+    tag: latest
+    pullPolicy: IfNotPresent
+  discoveryServer:
+    repository: tas-to-gke-axon-trader-discovery-server
+    tag: latest
+    pullPolicy: IfNotPresent
+  ui:
+    repository: tas-to-gke-axon-trader-trader-app-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+
+replicaCount:
+  traderApp: 1
+  tradingEngine: 1
+  discoveryServer: 1
+  ui: 1
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+javaMaxRamPercentage: "65.0"
+
+uiResources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    cpu: 100m
+    memory: 64Mi
+
+secrets:
+  existingName: ""
+
+# The credential defaults below are throwaway demo values for kind/local use.
+# Production installs must set secrets.existingName to an externally managed
+# Secret instead of using these values.
+database:
+  username: trader
+  password: trader
+  appDatabase: appdb
+  engineDatabase: enginedb
+  jdbcQueryParameters: "useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+
+rabbitmq:
+  enabled: true
+  host: rabbitmq
+  port: 5672
+  username: trader
+  password: trader
+  image: rabbitmq:3.13-management-alpine
+
+mysql:
+  enabled: true
+  image: mysql:5.7
+  host: mysql
+  port: 3306
+  rootPassword: root
+  persistence:
+    enabled: true
+  storage:
+    size: 2Gi
+
+cloudSqlProxy:
+  enabled: false
+  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.1
+  instanceConnectionName: replace-project:replace-region:replace-instance
+  serviceAccountName: ""
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+eureka:
+  serviceName: discovery-server
+  port: 8761
+
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  host: axon-trader.local
+  tls: []
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 3
+  targetCPUUtilizationPercentage: 70
+
+serviceAccount:
+  create: false
+  name: ""
+
+podSecurityContext: {}
+securityContext: {}

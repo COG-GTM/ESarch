@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "axon-trader.discoveryName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: discovery-server
+spec:
+  replicas: {{ .Values.replicaCount.discoveryServer }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: discovery-server
+      {{- include "axon-trader.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: discovery-server
+        {{- include "axon-trader.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: discovery-server
+          image: "{{ .Values.images.discoveryServer.repository }}:{{ .Values.images.discoveryServer.tag }}"
+          imagePullPolicy: {{ .Values.images.discoveryServer.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          env:
+            - name: JAVA_MAX_RAM_PERCENTAGE
+              value: {{ .Values.javaMaxRamPercentage | quote }}
+            - name: EUREKA_CLIENT_REGISTER_WITH_EUREKA
+              value: "false"
+            - name: EUREKA_CLIENT_FETCH_REGISTRY
+              value: "false"
+          ports:
+            - name: http
+              containerPort: 8761
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 24
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "axon-trader.discoveryName" . }}
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+    app.kubernetes.io/name: discovery-server
+spec:
+  selector:
+    app.kubernetes.io/name: discovery-server
+    {{- include "axon-trader.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.eureka.port }}
+      targetPort: http

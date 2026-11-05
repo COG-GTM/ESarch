@@ -1,0 +1,12 @@
+{{ include "axon-trader.validate" . }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: axon-trader-config
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+data:
+  trader-app-application-cloud.yml: |
+    {{- .Files.Get "config/trader-app-cloud.yml" | nindent 4 }}
+  trading-engine-application-cloud.yml: |
+    {{- .Files.Get "config/trading-engine-cloud.yml" | nindent 4 }}
