@@ -14,7 +14,10 @@ set -euo pipefail
 ns="${NAMESPACE:-axon-trader}"
 admin="${MYSQL_ADMIN_USER:-root}"
 
-sql=""
+# USE fails (ERROR 1049) and aborts the batch if either database is missing.
+sql="USE appdb;
+USE enginedb;
+"
 for pair in appdb:trader-app enginedb:trading-engine; do
   db="${pair%%:*}" user="${pair#*:}"
   sql+="REVOKE IF EXISTS cloudsqlsuperuser FROM '${user}'@'%';
