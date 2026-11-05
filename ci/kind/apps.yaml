@@ -1,0 +1,134 @@
+# Two replicas of each Axon app (kind only; the s3.5 Helm chart owns the real Deployments).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trading-engine
+  labels:
+    app.kubernetes.io/name: trading-engine
+    app.kubernetes.io/part-of: axon-trader
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trading-engine
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trading-engine
+        app.kubernetes.io/part-of: axon-trader
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: trading-engine
+          image: esarch/trading-engine:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: trading-engine-config
+            - secretRef:
+                name: trading-engine-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          # Probes as documented in deploy/kubernetes/README.md.
+          readinessProbe:
+            httpGet: {path: /actuator/health, port: http}
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: {path: /actuator/health, port: http}
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trading-engine
+  labels:
+    app.kubernetes.io/name: trading-engine
+spec:
+  selector:
+    app.kubernetes.io/name: trading-engine
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trader-app
+  labels:
+    app.kubernetes.io/name: trader-app
+    app.kubernetes.io/part-of: axon-trader
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: trader-app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: trader-app
+        app.kubernetes.io/part-of: axon-trader
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+      containers:
+        - name: trader-app
+          image: esarch/trader-app:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: trader-app-config
+            - secretRef:
+                name: trader-app-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          # Probes as documented in deploy/kubernetes/README.md.
+          readinessProbe:
+            httpGet: {path: /actuator/health, port: http}
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: {path: /actuator/health, port: http}
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 250m
+              memory: 768Mi
+            limits:
+              memory: 1Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: trader-app
+  labels:
+    app.kubernetes.io/name: trader-app
+spec:
+  selector:
+    app.kubernetes.io/name: trader-app
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

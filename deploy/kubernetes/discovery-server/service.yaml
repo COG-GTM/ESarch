@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-server
+  labels:
+    app.kubernetes.io/name: discovery-server
+    app.kubernetes.io/part-of: axon-trader
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: discovery-server
+  ports:
+    - name: http
+      port: 8761
+      targetPort: http
