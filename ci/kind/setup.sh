@@ -79,9 +79,11 @@ YAML
 kind_setup() { kind_cluster; kind_install; }
 
 # kind_probe <name> <app label|-> <host> <port>: curl from a throwaway pod (restricted securityContext) carrying that
-# app label. Blocked means curl timed out (exit 28) without ever connecting (time_connect 0), i.e. a NetworkPolicy
-# dropped the SYN; anything else (HTTP status, a protocol error from MySQL/AMQP, or a response timeout after the
-# connect) means the TCP connection was accepted. Prints "blocked" or "open(rc=N)".
+# app label. Prints one of:
+#   blocked     curl timed out (exit 28) without ever connecting (time_connect 0): a NetworkPolicy dropped the SYN;
+#   open(...)   TCP connected: HTTP answer (0), a non-HTTP greeting from MySQL/AMQP (1, "HTTP/0.9 not allowed"),
+#               empty reply / recv error (52/56), or a response timeout after the connect (28, time_connect > 0);
+#   error(...)  anything else, e.g. connection refused (7) or DNS failure (6): neither proves a flow open nor blocked.
 kind_probe() {
   local labels="esarch-probe=1"
   [ "$2" != - ] && labels="$labels,app.kubernetes.io/name=$2"
@@ -97,7 +99,12 @@ kind_probe() {
   out=$(k logs "np-$1" | grep '^rc=' || true)
   rc=$(sed -n 's/^rc=\([0-9]*\).*/\1/p' <<<"$out"); connect=$(sed -n 's/.*connect=//p' <<<"$out")
   k delete pod "np-$1" --wait=false >/dev/null
-  if [ "$rc" = 28 ] && [ "${connect:-0}" = 0.000000 ]; then echo blocked; else echo "open(rc=$rc)"; fi
+  case "$rc,${connect:-0}" in
+    28,0.000000) echo blocked ;;
+    0,* | 1,* | 52,* | 56,*) echo "open(rc=$rc connect=${connect}s)" ;;
+    28,*) echo "open(rc=28 connect=${connect}s)" ;;
+    *) echo "error(rc=${rc:-none} connect=${connect:-none}s)" ;;
+  esac
 }
 
 # Eureka helpers (need EUREKA_URL, jq and fail()).

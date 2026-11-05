@@ -61,7 +61,7 @@ k get pods -o json | jq -r '.items[] | .metadata.name as $p | .spec.containers[]
   "\($p)/\(.name) runAsNonRoot=\(.securityContext.runAsNonRoot // "pod") readOnlyRootFilesystem=\(.securityContext.readOnlyRootFilesystem // false) caps.drop=\(.securityContext.capabilities.drop // [] | join(","))"' |
   grep -v '^np-'
 
-echo "== 2. NetworkPolicies (blocked = no TCP connect within 5 s)"
+echo "== 2. NetworkPolicies (blocked = no TCP connect within 5 s; open = TCP connected; refused/DNS errors fail)"
 ip() { k get svc "$1" -o jsonpath='{.spec.clusterIP}'; }
 expect() { # want name label host port
   local got; got=$(kind_probe "$2" "$3" "$4" "$5")
@@ -85,12 +85,12 @@ kubectl --context "kind-$CLUSTER" create namespace np-egress-target --dry-run=cl
 kubectl --context "kind-$CLUSTER" -n np-egress-target run egress-target --image=esarch/trader-ui:latest --image-pull-policy=Never \
   --port=8080 --dry-run=client -o json |
   jq '.spec.securityContext = {runAsNonRoot: true, runAsUser: 101, seccompProfile: {type: "RuntimeDefault"}}
-    | .spec.containers[0].securityContext = {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}' |
-  kubectl --context "kind-$CLUSTER" apply -f - >/dev/null
-kubectl --context "kind-$CLUSTER" -n np-egress-target expose pod egress-target --port=8080 --dry-run=client -o yaml |
+    | .spec.containers[0].securityContext = {allowPrivilegeEscalation: false, capabilities: {drop: ["ALL"]}}
+    | .spec.containers[0].readinessProbe = {tcpSocket: {port: 8080}, periodSeconds: 2}' |
   kubectl --context "kind-$CLUSTER" apply -f - >/dev/null
 kubectl --context "kind-$CLUSTER" -n np-egress-target wait --for=condition=Ready pod/egress-target --timeout=120s >/dev/null
-target=$(kubectl --context "kind-$CLUSTER" -n np-egress-target get svc egress-target -o jsonpath='{.spec.clusterIP}')
+# Pod IP, not the ClusterIP: right after Ready, kube-proxy may still REJECT the endpoint-less Service (curl exit 7).
+target=$(kubectl --context "kind-$CLUSTER" -n np-egress-target get pod egress-target -o jsonpath='{.status.podIP}')
 expect open    other-to-target   -                "$target"                8080
 for a in trader-app trading-engine discovery-server trader-ui; do
   echo "INFO $a pod -> egress-target:8080 $(kind_probe "$a-tgt" "$a" "$target" 8080) (want blocked; kind CNI egress, re-check on GKE)"
