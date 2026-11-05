@@ -39,9 +39,9 @@ fi
 for s in $SERVICES; do
   d=$(jq -r --arg s "$s" '.[$s] // empty' <<<"$IMAGE_DIGESTS")
   [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "FAIL: IMAGE_DIGESTS has no sha256 digest for $s" >&2; exit 1; }
-  if existing=$(skopeo inspect --tls-verify="$tls" "${dst_inspect_auth[@]}" --raw "docker://$TARGET_REGISTRY/$s:$IMAGE_TAG" </dev/null 2>/dev/null); then
+  if skopeo inspect --tls-verify="$tls" "${dst_inspect_auth[@]}" --raw "docker://$TARGET_REGISTRY/$s:$IMAGE_TAG" </dev/null >"$auth/existing" 2>/dev/null; then
     # Prod tags are immutable: an existing tag is either this exact release (re-promotion / rollback) or a conflict.
-    have=$(printf '%s' "$existing" | sha256sum | cut -d' ' -f1)
+    have=$(sha256sum <"$auth/existing" | cut -d' ' -f1)
     [ "sha256:$have" = "$d" ] || { echo "FAIL: $TARGET_REGISTRY/$s:$IMAGE_TAG already holds sha256:$have, staging passed $d" >&2; exit 1; }
     echo "$s $d (already promoted)"
     continue
