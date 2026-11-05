@@ -177,6 +177,8 @@ Post-deploy step outside the scripts: `curl -sL -X POST ${trader-app-url}/actuat
 
 ## 10. Open items for the TAS → GKE mapping (`s1.2`)
 
+The mapping itself is in [`tas-gke-mapping.md`](tas-gke-mapping.md); its §10 resolves each item below as `OPEN-1`…`OPEN-7`, in order.
+
 1. **RTE-6 `axontrader.cfapps.io`**: unconfirmed. Only the `HostURLsMapping` key and the README link text name it, and the README link actually goes to `esrefarch-demo-trader-ui.cfapps.io`. If it was mapped, that happened outside the repo, so its owner, domain and TLS settings are unknown. Confirm with the TAS org owner, then decide whether GKE gets an equivalent host.
 2. **`cfapps.io` / PWS is gone.** PWS (`api.run.pivotal.io`, `*.cfapps.io`) was shut down in January 2021. Every hard-coded host in RTE-4, RTE-5, CFG-4, CI-17, `http-api.http` and the OPS scripts points at a dead platform. The live TAS foundation (if any) behind this migration is not recorded in the repo. Confirm its API endpoint, org/space and actual service plans (enterprise `p.mysql`/`p.rabbitmq`, as in OPS-3, is the likely shape).
 3. **ESarch-conf (SVC-5 backend)** is a third-party public repo with no pinned label. Decide whether to vendor CFG-2/CFG-3 into this repo (for example as ConfigMaps or `application-gke.yml`) or keep a Config Server.
