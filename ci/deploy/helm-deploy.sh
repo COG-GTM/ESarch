@@ -41,7 +41,21 @@ if [ -n "${IMAGE_DIGESTS:-}" ]; then
 fi
 args+=("$@")
 
-previous=$(hm history "$RELEASE" --max 50 -o json 2>/dev/null | jq -r '[.[] | select(.status == "deployed")] | last | .revision // empty' || true)
+output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "result=$1" >>"$GITHUB_OUTPUT"; fi; }
+
+# The revision to roll back to. Only a release that does not exist yet may have none: any other history error stops
+# here, before the upgrade, so a failed check can always restore what was serving.
+history_err=$(mktemp)
+if history=$(hm history "$RELEASE" --max 50 -o json 2>"$history_err"); then
+  previous=$(jq -r '[.[] | select(.status == "deployed")] | last | .revision // empty' <<<"$history")
+elif grep -q 'release: not found' "$history_err"; then
+  previous=""
+else
+  cat "$history_err" >&2
+  echo "::error::cannot read the helm history of $RELEASE; not deploying"
+  output not-deployed
+  exit 1
+fi
 echo "== deploy: release $RELEASE in $NS (currently deployed revision: ${previous:-none})"
 images
 
@@ -61,7 +75,7 @@ if [ -n "$failed" ]; then
 fi
 
 if [ -z "$failed" ]; then
-  current=$(hm history "$RELEASE" --max 1 -o json | jq -r '.[0].revision')
+  current=$(hm history "$RELEASE" --max 1 -o json | jq -r '.[0].revision') || current=unknown
   echo "== deploy: revision $current rolled out:"
   images
   if ! bash ci/deploy/smoke.sh; then failed="smoke/e2e checks"; fi
@@ -70,6 +84,7 @@ fi
 if [ -z "$failed" ]; then
   { echo "### Deployed \`$RELEASE\` revision $current to \`$NS\`"; echo; echo '```'; images; echo '```'; } | summary
   echo "DEPLOY OK: $RELEASE revision $current"
+  output deployed
   exit 0
 fi
 
@@ -77,6 +92,7 @@ echo "::error::$failed failed for $RELEASE; rolling back to revision ${previous:
 if [ -z "$previous" ]; then
   { echo "### Deploy of \`$RELEASE\` FAILED ($failed)"; echo; echo "No earlier deployed revision to roll back to."; } | summary
   echo "DEPLOY FAILED ($failed): no earlier deployed revision to roll back to" >&2
+  output no-rollback
   exit 1
 fi
 rollback=ok
@@ -93,4 +109,5 @@ images
   echo '```'
 } | summary
 echo "DEPLOY FAILED ($failed): rolled back $RELEASE to revision $previous ($rollback)" >&2
+if [ "$rollback" = ok ]; then output "rolled-back-to-$previous"; else output rollback-failed; fi
 exit 1
