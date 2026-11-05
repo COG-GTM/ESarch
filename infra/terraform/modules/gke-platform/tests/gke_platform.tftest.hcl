@@ -48,6 +48,28 @@ run "gateway_certificate_and_smoke_secret" {
   }
 }
 
+run "certificate_map_entry_names_unique_and_bounded" {
+  command = plan
+
+  variables {
+    hostnames = [
+      "a-b.example.com",
+      "a.b-example.com",
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.example.com",
+    ]
+  }
+
+  assert {
+    condition     = length(distinct([for e in google_certificate_manager_certificate_map_entry.gateway : e.name])) == 3
+    error_message = "Hostnames that differ only in dots vs hyphens must get distinct entry names."
+  }
+
+  assert {
+    condition     = alltrue([for e in google_certificate_manager_certificate_map_entry.gateway : can(regex("^[a-z][a-z0-9-]{0,61}[a-z0-9]$", e.name))])
+    error_message = "Entry names must be valid GCP resource names (<= 63 chars)."
+  }
+}
+
 run "rejects_empty_hostnames" {
   command = plan
 

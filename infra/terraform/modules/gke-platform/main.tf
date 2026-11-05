@@ -3,6 +3,15 @@
 # the platform ExternalSecret reads.
 locals {
   name = "${var.name_prefix}-${var.environment}"
+
+  # Entry names must be unique and <= 63 chars: readable hostname prefix + hash of the full hostname.
+  certificate_map_entry_names = {
+    for host in var.hostnames : host => format("%s-%s-%s",
+      local.name,
+      replace(substr(replace(host, ".", "-"), 0, 30), "/-+$/", ""),
+      substr(sha256(host), 0, 8),
+    )
+  }
 }
 
 resource "google_compute_global_address" "gateway" {
@@ -35,7 +44,7 @@ resource "google_certificate_manager_certificate_map_entry" "gateway" {
   for_each = toset(var.hostnames)
 
   project      = var.project_id
-  name         = "${local.name}-${replace(each.key, ".", "-")}"
+  name         = local.certificate_map_entry_names[each.key]
   map          = google_certificate_manager_certificate_map.gateway.name
   hostname     = each.key
   certificates = [google_certificate_manager_certificate.gateway.id]
