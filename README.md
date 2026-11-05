@@ -190,14 +190,17 @@ The `local` Spring profile plus `docker-compose.yml` run the whole Axon Trader o
 Prerequisites: JDK 8, Docker with Compose v2, Node.js (20 is known to work) with `npm`, plus `curl` and `jq` for the smoke script.
 
 ```bash
-# 1. Build and test (JDK 8)
+# 1. Build and test (JDK 8), then build the container images into the local Docker daemon with Jib
 ./mvnw clean verify
+./mvnw -DskipTests package jib:dockerBuild
 (cd trader-app-ui && npm ci && CI=true npm test)
 
-# 2. Backing services: MySQL 5.7 (:3306), RabbitMQ 3.7 (:5672, UI on :15672), Eureka discovery-server (:8761)
-docker compose up -d --build --wait
+# 2. Backing services: MySQL 5.7 (:3306), RabbitMQ 3.7 (:5672, UI on :15672), Eureka discovery-server image (:8761)
+docker compose up -d --wait
 
-# 3. Backend apps, each in its own terminal (trading-engine on :8081, trader-app on :8080)
+# 3. Backend apps (trading-engine on :8081, trader-app on :8080), either as images in Compose...
+docker compose --profile apps up -d --wait
+#    ...or as jars, each in its own terminal
 SPRING_PROFILES_ACTIVE=local java -jar trading-engine/target/trading-engine.jar
 SPRING_PROFILES_ACTIVE=local java -jar trader-app/target/trader-app.jar
 
@@ -207,6 +210,8 @@ SPRING_PROFILES_ACTIVE=local java -jar trader-app/target/trader-app.jar
 # 5. Smoke test: newman collection, ci/tasks/e2e-test-both-sides.sh, then a matched buy/sell checked in the portfolio view
 ci/local/verify-local.sh
 ```
+
+Jib builds `esarch/trading-engine`, `esarch/trader-app` and `esarch/discovery-server` (no Dockerfile, no local JDK in the image): Eclipse Temurin 8 JRE base pinned by digest, user `1000:1000`, `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError` instead of the buildpack memory calculator, and two tags, the 12-character git SHA and `latest`. Override with `-Dimage.registry=...` / `-Dimage.tag=...`; `jib:build` pushes instead of loading into Docker. Compose runs `latest` unless `ESARCH_IMAGE_TAG` (and `ESARCH_IMAGE_REGISTRY`) say otherwise.
 
 The backends bind to `127.0.0.1` only (the local profile has no auth in front of the trading API; set `ESARCH_BIND_ADDRESS` to change it). `ci/local/verify-local.sh` exits non-zero if newman, the e2e script or the portfolio check fails. It waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
 

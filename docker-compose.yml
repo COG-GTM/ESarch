@@ -3,9 +3,13 @@
 # and the repo's own Eureka discovery-server for SVC-4. There is no Config Server
 # (SVC-5): the `local` Spring profile turns the config client off instead.
 #
-# Build the jars first (./mvnw -B -DskipTests package), then:
-#   docker compose up -d --build
-# and start trading-engine / trader-app with SPRING_PROFILES_ACTIVE=local.
+# Build the jars and the container images first (Jib, JDK 8): ./mvnw -B -DskipTests package jib:dockerBuild
+# Then either run the backing services only and start trading-engine / trader-app as jars with
+# SPRING_PROFILES_ACTIVE=local:
+#   docker compose up -d --wait
+# or run the trading-engine and trader-app images too (the `apps` profile):
+#   docker compose --profile apps up -d --wait
+# ESARCH_IMAGE_TAG picks the image tag (default `latest`; Jib also tags each build with the short git SHA).
 # Values below are throwaway local defaults; override them with environment variables.
 services:
   mysql:
@@ -40,16 +44,70 @@ services:
       retries: 30
 
   discovery-server:
-    build: ./discovery-server
+    image: ${ESARCH_IMAGE_REGISTRY:-esarch}/discovery-server:${ESARCH_IMAGE_TAG:-latest}
     environment:
       EUREKA_CLIENT_REGISTER_WITH_EUREKA: "false"
       EUREKA_CLIENT_FETCH_REGISTRY: "false"
     ports:
       - "127.0.0.1:8761:8761"
+    mem_limit: 512m
     healthcheck:
       test: ["CMD-SHELL", "curl -sf http://localhost:8761/actuator/health || curl -sf http://localhost:8761/ > /dev/null"]
       interval: 5s
       timeout: 5s
+      retries: 30
+
+  # The two Axon apps from their Jib images, with the same `local` profile the jars use. Inside the Compose network
+  # they listen on all interfaces and register their service name in Eureka (so Axon routes commands to
+  # http://trading-engine:8081), but the host ports stay on loopback because the local profile has no auth.
+  # mem_limit matches the TAS default of 1G; -XX:MaxRAMPercentage=75.0 in the image sizes the heap from it.
+  trading-engine:
+    image: ${ESARCH_IMAGE_REGISTRY:-esarch}/trading-engine:${ESARCH_IMAGE_TAG:-latest}
+    profiles: ["apps"]
+    environment: &app-env
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_ADDRESS: 0.0.0.0
+      EUREKA_INSTANCE_HOSTNAME: trading-engine
+      EUREKA_INSTANCE_PREFERIPADDRESS: "false"
+      ESARCH_MYSQL_HOST: mysql
+      ESARCH_MYSQL_USER: ${ESARCH_MYSQL_USER:-trader}
+      ESARCH_MYSQL_PASSWORD: ${ESARCH_MYSQL_PASSWORD:-trader}
+      ESARCH_RABBITMQ_HOST: rabbitmq
+      ESARCH_RABBITMQ_USER: ${ESARCH_RABBITMQ_USER:-trader}
+      ESARCH_RABBITMQ_PASSWORD: ${ESARCH_RABBITMQ_PASSWORD:-trader}
+      ESARCH_EUREKA_URL: http://discovery-server:8761/eureka/
+    ports:
+      - "127.0.0.1:8081:8081"
+    mem_limit: 1g
+    depends_on: &app-deps
+      mysql:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      discovery-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8081/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
+      retries: 30
+
+  trader-app:
+    image: ${ESARCH_IMAGE_REGISTRY:-esarch}/trader-app:${ESARCH_IMAGE_TAG:-latest}
+    profiles: ["apps"]
+    environment:
+      <<: *app-env
+      EUREKA_INSTANCE_HOSTNAME: trader-app
+    ports:
+      - "127.0.0.1:8080:8080"
+    mem_limit: 1g
+    depends_on: *app-deps
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:8080/actuator/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 30s
       retries: 30
 
 volumes:
