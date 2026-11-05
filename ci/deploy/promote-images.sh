@@ -2,7 +2,8 @@
 # Promotes the exact images that passed staging into the production Artifact Registry, without rebuilding (s4.3):
 # for each service, copies <SOURCE_REGISTRY>/<service>@<digest> (the whole index, attestations included) to
 # <TARGET_REGISTRY>/<service>:<IMAGE_TAG> with `skopeo copy --all --preserve-digests`, which fails rather than rewrite
-# a manifest, then checks the target tag serves that same digest. Re-running a promotion is a no-op.
+# a manifest, then checks the target tag serves that same digest. A tag already serving the digest is left alone (prod tags
+# are immutable, so re-promoting a release, e.g. to roll back, must not push it again); any other digest fails.
 #
 # Env: SOURCE_REGISTRY, TARGET_REGISTRY  e.g. us-central1-docker.pkg.dev/<project>/axon-trader
 #      IMAGE_TAG                         git SHA the images were published with
@@ -38,6 +39,13 @@ fi
 for s in $SERVICES; do
   d=$(jq -r --arg s "$s" '.[$s] // empty' <<<"$IMAGE_DIGESTS")
   [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "FAIL: IMAGE_DIGESTS has no sha256 digest for $s" >&2; exit 1; }
+  if existing=$(skopeo inspect --tls-verify="$tls" "${dst_inspect_auth[@]}" --raw "docker://$TARGET_REGISTRY/$s:$IMAGE_TAG" </dev/null 2>/dev/null); then
+    # Prod tags are immutable: an existing tag is either this exact release (re-promotion / rollback) or a conflict.
+    have=$(printf '%s' "$existing" | sha256sum | cut -d' ' -f1)
+    [ "sha256:$have" = "$d" ] || { echo "FAIL: $TARGET_REGISTRY/$s:$IMAGE_TAG already holds sha256:$have, staging passed $d" >&2; exit 1; }
+    echo "$s $d (already promoted)"
+    continue
+  fi
   skopeo copy --src-tls-verify="$tls" --dest-tls-verify="$tls" "${src_auth[@]}" "${dst_auth[@]}" --all --preserve-digests --quiet \
     "docker://$SOURCE_REGISTRY/$s@$d" "docker://$TARGET_REGISTRY/$s:$IMAGE_TAG" </dev/null
   got=$(skopeo inspect --tls-verify="$tls" "${dst_inspect_auth[@]}" --raw "docker://$TARGET_REGISTRY/$s:$IMAGE_TAG" </dev/null | sha256sum | cut -d' ' -f1)
