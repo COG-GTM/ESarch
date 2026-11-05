@@ -1,0 +1,11 @@
+# Keep 2 of 3 RabbitMQ nodes (a quorum) up during voluntary disruptions such as node upgrades.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: rabbitmq
+  namespace: axon-trader
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: rabbitmq

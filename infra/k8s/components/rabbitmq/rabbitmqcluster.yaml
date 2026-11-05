@@ -1,0 +1,28 @@
+# AMQP endpoint for the apps: rabbitmq.axon-trader.svc.cluster.local:5672, vhost /.
+# Check: kubectl -n axon-trader get rabbitmqcluster rabbitmq  (ALLREPLICASREADY True)
+apiVersion: rabbitmq.com/v1beta1
+kind: RabbitmqCluster
+metadata:
+  name: rabbitmq
+  namespace: axon-trader
+spec:
+  replicas: 1
+  image: rabbitmq:4.2.9-management
+  service:
+    type: ClusterIP
+  persistence:
+    # Cluster default StorageClass (GKE: standard-rwo, Persistent Disk CSI).
+    storage: 10Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 1Gi
+    limits:
+      memory: 1Gi
+  secretBackend:
+    externalSecret:
+      name: rabbitmq-default-user-external
+  rabbitmq:
+    additionalConfig: |
+      vm_memory_high_watermark.relative = 0.6
+      disk_free_limit.absolute = 1GB

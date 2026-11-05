@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: axon-trader
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: trading-engine
+  namespace: axon-trader
+---
+# Same default-deny as platform/networkpolicy.yaml, so the RabbitMQ policy is exercised.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: axon-trader
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress

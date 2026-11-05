@@ -38,3 +38,10 @@ alert_notification_emails = [
 labels = {
   team = "REPLACE_WITH_TEAM"
 }
+
+# Cloud SQL for MySQL 8.0 (private IP; databases appdb/enginedb, users trader-app/trading-engine).
+cloudsql_tier                           = "db-custom-1-3840"
+cloudsql_availability_type              = "ZONAL"
+cloudsql_point_in_time_recovery_enabled = false
+cloudsql_retained_backups               = 7
+cloudsql_deletion_protection            = true

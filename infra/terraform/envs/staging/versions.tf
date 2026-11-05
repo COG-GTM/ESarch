@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 6.0, < 7.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = ">= 3.6, < 4.0"
+    }
   }
 
   # Partial configuration: the bucket comes from `terraform init -backend-config=backend.hcl`

@@ -44,3 +44,8 @@ replacements:
     targets:
       - select: {kind: ExternalSecret, name: platform-smoke-test}
         fieldPaths: [spec.data.0.remoteRef.key]
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.CLOUDSQL_INSTANCE_CONNECTION_NAME}
+    targets:
+      - select: {kind: Job, name: backing-services-check}
+        fieldPaths:
+          - "spec.template.spec.initContainers.[name=cloud-sql-proxy].args.0"

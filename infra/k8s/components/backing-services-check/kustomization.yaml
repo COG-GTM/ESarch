@@ -1,0 +1,7 @@
+# Staging acceptance for the backing services: a debug Job in axon-trader that resolves the
+# Secret Manager credentials through ESO, then connects to Cloud SQL (through the Cloud SQL Auth
+# Proxy, private IP, Workload Identity) and to RabbitMQ. Drop it once p3's apps are deployed.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - check.yaml

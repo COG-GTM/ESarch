@@ -1,0 +1,7 @@
+# RabbitMQ Cluster Operator (namespace rabbitmq-system, CRD RabbitmqCluster), pinned release.
+# Needs cert-manager (addons/cert-manager) for its webhook and metrics certificates.
+# kubectl apply --server-side -k infra/k8s/addons/rabbitmq-operator
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - https://github.com/rabbitmq/cluster-operator/releases/download/v2.23.2/cluster-operator.yml

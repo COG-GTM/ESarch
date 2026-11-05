@@ -1,0 +1,7 @@
+crds:
+  enabled: true
+  keep: true
+global:
+  leaderElection:
+    # GKE Autopilot does not allow writes to kube-system.
+    namespace: cert-manager

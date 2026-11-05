@@ -68,6 +68,16 @@ output "gateway_address" {
   value       = module.gke_platform.gateway_address
 }
 
+output "cloudsql_instance_connection_name" {
+  description = "Cloud SQL instance connection name (Cloud SQL Auth Proxy argument)."
+  value       = module.backing_services.instance_connection_name
+}
+
+output "cloudsql_private_ip_address" {
+  description = "Private IP of the Cloud SQL instance."
+  value       = module.backing_services.private_ip_address
+}
+
 output "kustomize_env" {
   description = "Values for infra/k8s/overlays/<env>/cluster.env (written by infra/k8s/scripts/cluster-env.sh)."
   value = {
@@ -80,6 +90,8 @@ output "kustomize_env" {
     CERT_MAP_NAME        = module.gke_platform.certificate_map_name
     SMOKE_HOSTNAME       = var.gateway_hostnames[0]
     SMOKE_SECRET_ID      = module.gke_platform.smoke_test_secret_id
+
+    CLOUDSQL_INSTANCE_CONNECTION_NAME = module.backing_services.instance_connection_name
   }
 }
 

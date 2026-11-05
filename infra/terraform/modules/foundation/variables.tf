@@ -84,12 +84,13 @@ variable "artifact_registry_cleanup_dry_run" {
 }
 
 variable "secrets" {
-  description = "Secret Manager secrets keyed by secret id; values are the workload service accounts (trader-app, trading-engine) allowed to read each one."
+  description = "Secret Manager secrets keyed by secret id; values are the workload service accounts (trader-app, trading-engine) allowed to read each one (empty: operators only)."
   type        = map(list(string))
   default = {
     "trader-app-db-password"     = ["trader-app"]
     "trading-engine-db-password" = ["trading-engine"]
     "rabbitmq-password"          = ["trader-app", "trading-engine"]
+    "cloudsql-admin-password"    = []
   }
 
   validation {
