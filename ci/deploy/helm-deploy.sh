@@ -23,6 +23,7 @@ SERVICES="trading-engine trader-app discovery-server trader-ui"
 export NS KUBE_CONTEXT="${KUBE_CONTEXT:-}"
 kc() { kubectl ${KUBE_CONTEXT:+--context "$KUBE_CONTEXT"} -n "$NS" "$@"; }
 hm() { helm ${KUBE_CONTEXT:+--kube-context "$KUBE_CONTEXT"} -n "$NS" "$@"; }
+output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "result=$1" >>"$GITHUB_OUTPUT"; fi; }
 summary() { if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then cat >>"$GITHUB_STEP_SUMMARY"; else cat >/dev/null; fi; }
 images() { kc get deploy "${DEPLOYMENTS[@]}" -o jsonpath='{range .items[*]}{.metadata.name}={.spec.template.spec.containers[0].image}{"\n"}{end}' 2>/dev/null || true; }
 
@@ -35,13 +36,11 @@ fi
 if [ -n "${IMAGE_DIGESTS:-}" ]; then
   for s in $SERVICES; do
     d=$(jq -r --arg s "$s" '.[$s] // empty' <<<"$IMAGE_DIGESTS")
-    [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "FAIL: IMAGE_DIGESTS has no sha256 digest for $s" >&2; exit 1; }
+    [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "FAIL: IMAGE_DIGESTS has no sha256 digest for $s" >&2; output not-deployed; exit 1; }
     args+=(--set "$s.image.digest=$d")
   done
 fi
 args+=("$@")
-
-output() { if [ -n "${GITHUB_OUTPUT:-}" ]; then echo "result=$1" >>"$GITHUB_OUTPUT"; fi; }
 
 # The revision to roll back to. Only a release that does not exist yet may have none: any other history error stops
 # here, before the upgrade, so a failed check can always restore what was serving.
@@ -98,16 +97,16 @@ fi
 rollback=ok
 hm rollback "$RELEASE" "$previous" --wait --timeout "$ROLLOUT_TIMEOUT" || rollback=failed
 for d in "${DEPLOYMENTS[@]}"; do kc rollout status "deploy/$d" --timeout="$ROLLOUT_TIMEOUT" || rollback=failed; done
+if [ "$rollback" = ok ]; then output "rolled-back-to-$previous"; else output rollback-failed; fi
 echo "== rollback: helm history"
-hm history "$RELEASE" --max 5
+hm history "$RELEASE" --max 5 || true
 images
 {
   echo "### Deploy of \`$RELEASE\` FAILED ($failed): rolled back to revision $previous ($rollback)"
   echo
   echo '```'
-  hm history "$RELEASE" --max 5
+  hm history "$RELEASE" --max 5 || true
   echo '```'
 } | summary
 echo "DEPLOY FAILED ($failed): rolled back $RELEASE to revision $previous ($rollback)" >&2
-if [ "$rollback" = ok ]; then output "rolled-back-to-$previous"; else output rollback-failed; fi
 exit 1
