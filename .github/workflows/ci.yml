@@ -102,13 +102,14 @@ jobs:
           docker save -o target/ci-images/trader-ui.tar "esarch/trader-ui:$GITHUB_SHA"
       - name: Trivy scan (fails on critical CVEs not in ci/trivy/critical-baseline.yaml)
         run: |
-          set -uo pipefail
+          set -euo pipefail
           mkdir -p target/trivy-reports "$HOME/.cache/trivy"
           docker pull -q "$TRIVY_IMAGE" >/dev/null
           trivy() {
             docker run --rm -v "$PWD:/work" -w /work -v "$HOME/.cache/trivy:/root/.cache/trivy" "$TRIVY_IMAGE" \
-              image --scanners vuln --skip-version-check "$@"
+              image --scanners vuln --skip-version-check --quiet --format json "$@"
           }
+          count() { jq "[.Results[]? | .Vulnerabilities[]? | select(.Severity == \"$2\")] | length" "$1"; }
           {
             echo "### Trivy scan (${TRIVY_IMAGE%@*})"
             echo
@@ -117,20 +118,28 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           failed=0
           for image in $IMAGES; do
-            echo "::group::$image"
-            trivy --input "target/ci-images/$image.tar" --severity CRITICAL,HIGH --format json --output "target/trivy-reports/$image.json" --quiet
-            trivy --input "target/ci-images/$image.tar" --severity CRITICAL --ignorefile ci/trivy/critical-baseline.yaml \
-              --format json --output "target/trivy-reports/$image-gate.json" --quiet
-            trivy --input "target/ci-images/$image.tar" --severity CRITICAL --ignorefile ci/trivy/critical-baseline.yaml \
-              --format table --exit-code 1 --quiet
-            gate=$?
-            echo "::endgroup::"
-            count() { jq "[.Results[]? | .Vulnerabilities[]? | select(.Severity == \"$2\")] | length" "$1"; }
-            all=$(count "target/trivy-reports/$image.json" CRITICAL)
-            new=$(count "target/trivy-reports/$image-gate.json" CRITICAL)
-            high=$(count "target/trivy-reports/$image.json" HIGH)
-            if [ "$gate" -eq 0 ]; then result=pass; else result="**FAIL**"; failed=1; echo "::error::$image has $new critical CVE(s) not in the baseline"; fi
-            echo "| esarch/$image:${GITHUB_SHA:0:12} | $new | $((all - new)) | $high | $result |" >> "$GITHUB_STEP_SUMMARY"
+            tag="esarch/$image:${GITHUB_SHA:0:12}"
+            report="target/trivy-reports/$image.json"
+            gate="target/trivy-reports/$image-gate.json"
+            if ! trivy --input "target/ci-images/$image.tar" --severity CRITICAL,HIGH --output "$report" ||
+              ! trivy --input "target/ci-images/$image.tar" --severity CRITICAL --ignorefile ci/trivy/critical-baseline.yaml --output "$gate"; then
+              failed=1
+              echo "::error::Trivy could not scan $image"
+              echo "| $tag | ? | ? | ? | **ERROR** (scan failed) |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            all=$(count "$report" CRITICAL)
+            new=$(count "$gate" CRITICAL)
+            high=$(count "$report" HIGH)
+            if [ "$new" -eq 0 ]; then
+              result=pass
+            else
+              result="**FAIL**"
+              failed=1
+              echo "::error::$image has $new critical CVE(s) not in ci/trivy/critical-baseline.yaml"
+              jq -r '.Results[]? | .Target as $t | .Vulnerabilities[]? | "\(.VulnerabilityID)  \(.PkgName) \(.InstalledVersion) -> \(.FixedVersion // "no fix")  (\($t))"' "$gate"
+            fi
+            echo "| $tag | $new | $((all - new)) | $high | $result |" >> "$GITHUB_STEP_SUMMARY"
           done
           exit "$failed"
       - name: Upload Trivy reports

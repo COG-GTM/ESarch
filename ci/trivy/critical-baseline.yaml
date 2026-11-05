@@ -4,7 +4,7 @@
 # version (purl): upgrading a library drops it out of the baseline instead of carrying the exception forward.
 # Most of these are only fixed in Spring Boot 2.5+/3.x, Spring Framework 6/7 and Tomcat 9+, i.e. a stack upgrade
 # beyond this migration; the whole file expires so the exception has to be revisited.
-# Regenerate from Trivy JSON reports: ci/trivy/baseline.sh trivy-*.json > ci/trivy/critical-baseline.yaml
+# Regenerate with ci/trivy/baseline.sh (see there).
 vulnerabilities:
   - id: CVE-2013-7285
     purls:
