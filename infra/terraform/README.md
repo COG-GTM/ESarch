@@ -89,10 +89,12 @@ new_pw="$(gcloud secrets versions access latest --secret=rabbitmq-password --pro
 printf '%s\n' "${new_pw}" |
   kubectl -n axon-trader exec -i rabbitmq-server-0 -c rabbitmq -- sh -c 'read -r p; rabbitmqctl change_password axon-trader "$p"'
 kubectl -n axon-trader annotate externalsecret rabbitmq-default-user force-sync="$(date +%s)" --overwrite
-# Ready stays true from the previous sync; wait until the synced Secret actually holds the new password.
-until [ "$(kubectl -n axon-trader get secret rabbitmq-default-user-external -o jsonpath='{.data.password}' | base64 -d)" = "${new_pw}" ]; do sleep 5; done
+# Ready stays true from the previous sync; wait (up to 2m) until the synced Secret holds the new password.
+NEW_PW="${new_pw}" timeout 2m bash -c 'until [ "$(kubectl -n axon-trader get secret rabbitmq-default-user-external \
+    -o jsonpath="{.data.password}" | base64 -d)" = "${NEW_PW}" ]; do sleep 5; done' &&
+  kubectl -n axon-trader rollout restart statefulset/rabbitmq-server ||   # refreshes the in-pod rabbitmqadmin config
+  echo "Secret not refreshed: kubectl -n axon-trader describe externalsecret rabbitmq-default-user; restart once it syncs"
 unset new_pw
-kubectl -n axon-trader rollout restart statefulset/rabbitmq-server   # refreshes the in-pod rabbitmqadmin config
 ```
 
 The user database is shared by the cluster, so one node is enough. Never delete the PVCs to reset the password.
