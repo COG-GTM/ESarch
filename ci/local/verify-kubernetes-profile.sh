@@ -4,7 +4,9 @@
 #      ExternalSecret provide (env -i, no other configuration);
 #   2. check Flyway applied V1, Hibernate validated the schema, /actuator/health is UP and /actuator/prometheus scrapes;
 #   3. seed the demo data, place orders, restart both apps and check orders, portfolios and the event store are unchanged.
-# Build the jars first (mvn -B -DskipTests package). ESARCH_RESET=1 wipes the compose volumes first (fresh databases).
+# Build the jars and images first (mvn -B -DskipTests package jib:dockerBuild). ESARCH_RESET=1 wipes the compose volumes
+# first (fresh databases). ESARCH_RUNTIME=image runs the Jib images (esarch/<app>:${ESARCH_IMAGE_TAG:-latest}) on the
+# Compose network instead of the jars, listening on 8080 inside the container as in the pod (host ports 8080/8081).
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -17,32 +19,50 @@ MYSQL_PASSWORD=${ESARCH_MYSQL_PASSWORD:-trader}
 RABBITMQ_USER=${ESARCH_RABBITMQ_USER:-trader}
 RABBITMQ_PASSWORD=${ESARCH_RABBITMQ_PASSWORD:-trader}
 mkdir -p "$LOGS"
+RUNTIME=${ESARCH_RUNTIME:-jar}
+IMAGE_TAG=${ESARCH_IMAGE_TAG:-latest}
 pids=()
 
-cleanup() { for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done; wait 2>/dev/null || true; }
+cleanup() {
+  if [ "$RUNTIME" = image ]; then docker rm -f esarch-k8s-trading-engine esarch-k8s-trader-app >/dev/null 2>&1 || true; fi
+  for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done; wait 2>/dev/null || true
+}
 trap cleanup EXIT
 
 if [ "${ESARCH_RESET:-0}" = 1 ]; then docker compose down -v; fi
-docker compose up -d --build --wait
+docker compose up -d --wait
+NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$(docker compose ps -q mysql)")
 
 mysql_q() { docker compose exec -T mysql mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "$2" "$1" 2>/dev/null; }
 
 # Exactly what the Deployment gets: ConfigMap keys + ExternalSecret keys (deploy/kubernetes/<app>/), nothing else.
+app_env() {
+  local db=$1 db_host=$2 rabbit_host=$3 eureka=$4
+  echo "SPRING_PROFILES_ACTIVE=kubernetes"
+  echo "SPRING_DATASOURCE_URL=jdbc:mysql://$db_host:3306/$db?useSSL=false&allowPublicKeyRetrieval=true"
+  echo "SPRING_DATASOURCE_USERNAME=$MYSQL_USER"
+  echo "SPRING_DATASOURCE_PASSWORD=$MYSQL_PASSWORD"
+  echo "SPRING_RABBITMQ_HOST=$rabbit_host"
+  echo "SPRING_RABBITMQ_PORT=5672"
+  echo "SPRING_RABBITMQ_USERNAME=$RABBITMQ_USER"
+  echo "SPRING_RABBITMQ_PASSWORD=$RABBITMQ_PASSWORD"
+  echo "SPRING_RABBITMQ_VIRTUAL_HOST=/"
+  echo "EUREKA_DEFAULT_ZONE=$eureka"
+}
+
 start() {
   local app=$1 db=$2 port=$3 run=$4
-  env -i PATH="$PATH" \
-    SPRING_PROFILES_ACTIVE=kubernetes \
-    SERVER_PORT="$port" \
-    SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/$db?useSSL=false&allowPublicKeyRetrieval=true" \
-    SPRING_DATASOURCE_USERNAME="$MYSQL_USER" \
-    SPRING_DATASOURCE_PASSWORD="$MYSQL_PASSWORD" \
-    SPRING_RABBITMQ_HOST=localhost \
-    SPRING_RABBITMQ_PORT=5672 \
-    SPRING_RABBITMQ_USERNAME="$RABBITMQ_USER" \
-    SPRING_RABBITMQ_PASSWORD="$RABBITMQ_PASSWORD" \
-    SPRING_RABBITMQ_VIRTUAL_HOST=/ \
-    EUREKA_DEFAULT_ZONE=http://localhost:8761/eureka/ \
-    "$JAVA" -jar "$app/target/$app.jar" >"$LOGS/$app-$run.log" 2>&1 &
+  if [ "$RUNTIME" = image ]; then
+    # Only the image's own environment (JAVA_TOOL_OPTIONS) plus the ConfigMap/Secret keys; server.port stays 8080.
+    docker run -d --name "esarch-k8s-$app" --network "$NETWORK" -p "127.0.0.1:$port:8080" --memory 1g \
+      --env-file <(app_env "$db" mysql rabbitmq http://discovery-server:8761/eureka/) \
+      "${ESARCH_IMAGE_REGISTRY:-esarch}/$app:$IMAGE_TAG" >/dev/null
+    docker logs -f "esarch-k8s-$app" >"$LOGS/$app-$run.log" 2>&1 &
+  else
+    # shellcheck disable=SC2046
+    env -i PATH="$PATH" SERVER_PORT="$port" $(app_env "$db" localhost localhost http://localhost:8761/eureka/) \
+      "$JAVA" -jar "$app/target/$app.jar" >"$LOGS/$app-$run.log" 2>&1 &
+  fi
   pids+=($!)
 }
 
@@ -84,7 +104,7 @@ snapshot() {
   echo "appdb.order_view=$(mysql_q appdb 'select count(*) from order_view')"
 }
 
-echo "== 1. Start both apps with SPRING_PROFILES_ACTIVE=kubernetes and only ConfigMap/Secret env vars"
+echo "== 1. Start both apps ($RUNTIME) with SPRING_PROFILES_ACTIVE=kubernetes and only ConfigMap/Secret env vars"
 start_both 1
 
 echo "== 2. Flyway, actuator health and Prometheus"
@@ -102,7 +122,8 @@ echo "== 3. Seed demo data and place orders"
 initialised=false
 for _ in $(seq 1 30); do
   result=$(curl -s -X POST "$APP_URL/actuator/data-initializer" || true)
-  if [ "$result" = true ] || [ "$result" = false ]; then initialised=true; echo "data-initializer: $result"; break; fi
+  # false means trader-app has no route to trading-engine in Eureka yet; true means seeded (or already seeded).
+  if [ "$result" = true ]; then initialised=true; echo "data-initializer: $result"; break; fi
   sleep 5
 done
 [ "$initialised" = true ] || { echo "trader-app never reached trading-engine" >&2; exit 1; }

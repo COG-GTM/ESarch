@@ -61,4 +61,4 @@ restarting pods during a short broker or database blip. Prometheus scrapes `/act
 
 `ci/local/verify-kubernetes-profile.sh` starts both jars against `docker-compose.yml` with only these variables
 (`env -i`), checks Flyway, health and Prometheus, places orders, restarts both apps and diffs orders, portfolios and
-event-store counts before and after.
+event-store counts before and after. `ESARCH_RUNTIME=image` does the same with the Jib images (`esarch/<app>:latest`), listening on 8080 inside the container as in the pod, which is the port `infra/k8s/platform/monitoring.yaml` scrapes.
