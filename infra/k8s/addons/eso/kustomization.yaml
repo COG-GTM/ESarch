@@ -1,0 +1,15 @@
+# External Secrets Operator, rendered from the upstream chart (pinned) with
+# `kustomize build --enable-helm`. Apply before the overlays: the CRDs must exist first.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: external-secrets
+resources:
+  - namespace.yaml
+helmCharts:
+  - name: external-secrets
+    repo: oci://ghcr.io/external-secrets/charts
+    version: 2.12.0
+    releaseName: external-secrets
+    namespace: external-secrets
+    includeCRDs: true
+    valuesFile: values.yaml

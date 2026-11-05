@@ -29,6 +29,7 @@ variable "services" {
   type        = list(string)
   default = [
     "artifactregistry.googleapis.com",
+    "certificatemanager.googleapis.com",
     "cloudresourcemanager.googleapis.com",
     "compute.googleapis.com",
     "container.googleapis.com",

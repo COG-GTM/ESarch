@@ -1,0 +1,18 @@
+# kubectl apply --server-side -k infra/k8s/overlays/staging  (after scripts/cluster-env.sh staging)
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../platform
+components:
+  - ../../components/smoke
+  - ../../components/cluster-env
+configMapGenerator:
+  - name: cluster-env
+    namespace: axon-trader
+    envs:
+      - cluster.env
+    options:
+      disableNameSuffixHash: true
+      annotations:
+        # Source of the replacements only; not applied to the cluster.
+        config.kubernetes.io/local-config: "true"

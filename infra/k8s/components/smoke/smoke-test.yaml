@@ -1,0 +1,19 @@
+# Resolves the platform-smoke-test secret (modules/gke-platform) through the trader-app store.
+# Check: kubectl -n axon-trader get externalsecret platform-smoke-test  (STATUS SecretSynced)
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: platform-smoke-test
+  namespace: axon-trader
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: SecretStore
+    name: gcp-sm-trader-app
+  target:
+    name: platform-smoke-test
+    creationPolicy: Owner
+  data:
+    - secretKey: value
+      remoteRef:
+        key: SMOKE_SECRET_ID

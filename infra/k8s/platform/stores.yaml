@@ -1,0 +1,33 @@
+# One SecretStore per workload: ESO authenticates as the workload's KSA, so each store can read
+# only the Secret Manager secrets that workload's GSA has secretAccessor on.
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: gcp-sm-trader-app
+spec:
+  provider:
+    gcpsm:
+      projectID: PROJECT_ID
+      auth:
+        workloadIdentity:
+          clusterLocation: CLUSTER_LOCATION
+          clusterName: CLUSTER_NAME
+          clusterProjectID: PROJECT_ID
+          serviceAccountRef:
+            name: trader-app
+---
+apiVersion: external-secrets.io/v1
+kind: SecretStore
+metadata:
+  name: gcp-sm-trading-engine
+spec:
+  provider:
+    gcpsm:
+      projectID: PROJECT_ID
+      auth:
+        workloadIdentity:
+          clusterLocation: CLUSTER_LOCATION
+          clusterName: CLUSTER_NAME
+          clusterProjectID: PROJECT_ID
+          serviceAccountRef:
+            name: trading-engine

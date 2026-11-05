@@ -78,3 +78,34 @@ variable "ci_allowed_refs" {
   type        = list(string)
   default     = []
 }
+
+variable "gke_master_ipv4_cidr_block" {
+  description = "/28 control plane range of the GKE cluster (must not overlap the VPC ranges)."
+  type        = string
+}
+
+variable "gke_enable_private_endpoint" {
+  description = "Expose the GKE control plane on its private IP only."
+  type        = bool
+  default     = false
+}
+
+variable "gke_master_authorized_networks" {
+  description = "CIDRs allowed to reach the GKE control plane (operators, CI runners)."
+  type = list(object({
+    cidr_block   = string
+    display_name = string
+  }))
+  default = []
+}
+
+variable "gke_deletion_protection" {
+  description = "Block terraform destroy of the GKE cluster."
+  type        = bool
+  default     = true
+}
+
+variable "gateway_hostnames" {
+  description = "Hostnames served by the Gateway with a Google-managed certificate; the first one serves the hello-world smoke test on staging."
+  type        = list(string)
+}

@@ -1,0 +1,46 @@
+# Copies the values of the cluster-env ConfigMap (overlays/<env>/cluster.env, rendered from
+# Terraform outputs) into the manifests. List it last so it also reaches component resources.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+replacements:
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.PROJECT_ID}
+    targets:
+      - select: {kind: SecretStore}
+        fieldPaths:
+          - spec.provider.gcpsm.projectID
+          - spec.provider.gcpsm.auth.workloadIdentity.clusterProjectID
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.CLUSTER_NAME}
+    targets:
+      - select: {kind: SecretStore}
+        fieldPaths: [spec.provider.gcpsm.auth.workloadIdentity.clusterName]
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.CLUSTER_LOCATION}
+    targets:
+      - select: {kind: SecretStore}
+        fieldPaths: [spec.provider.gcpsm.auth.workloadIdentity.clusterLocation]
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.TRADER_APP_GSA}
+    targets:
+      - select: {kind: ServiceAccount, name: trader-app}
+        fieldPaths:
+          - "metadata.annotations.[iam.gke.io/gcp-service-account]"
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.TRADING_ENGINE_GSA}
+    targets:
+      - select: {kind: ServiceAccount, name: trading-engine}
+        fieldPaths:
+          - "metadata.annotations.[iam.gke.io/gcp-service-account]"
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.GATEWAY_ADDRESS_NAME}
+    targets:
+      - select: {kind: Gateway, name: axon-trader}
+        fieldPaths: [spec.addresses.0.value]
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.CERT_MAP_NAME}
+    targets:
+      - select: {kind: Gateway, name: axon-trader}
+        fieldPaths:
+          - "metadata.annotations.[networking.gke.io/certmap]"
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.SMOKE_HOSTNAME}
+    targets:
+      - select: {kind: HTTPRoute, name: hello-world}
+        fieldPaths: [spec.hostnames.0]
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.SMOKE_SECRET_ID}
+    targets:
+      - select: {kind: ExternalSecret, name: platform-smoke-test}
+        fieldPaths: [spec.data.0.remoteRef.key]
