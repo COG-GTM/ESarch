@@ -1,5 +1,7 @@
 # AMQP endpoint for the apps: rabbitmq.axon-trader.svc.cluster.local:5672, vhost /.
 # Check: kubectl -n axon-trader get rabbitmqcluster rabbitmq  (ALLREPLICASREADY True)
+# The operator enables rabbitmq_prometheus (:15692) and labels the pods
+# app.kubernetes.io/component=rabbitmq, which the PodMonitoring in platform/monitoring.yaml selects.
 apiVersion: rabbitmq.com/v1beta1
 kind: RabbitmqCluster
 metadata:
