@@ -1,0 +1,21 @@
+# Copy to terraform.tfvars (git-ignored) and fill in. No real ids belong in this file.
+project_id = "REPLACE_WITH_PROD_PROJECT_ID"
+region     = "us-central1"
+
+subnet_cidr   = "10.20.0.0/20"
+pods_cidr     = "10.22.0.0/16"
+services_cidr = "10.23.0.0/20"
+
+artifact_registry_immutable_tags  = true
+artifact_registry_cleanup_dry_run = false
+
+kubernetes_namespace                  = "axon-trader"
+enable_gke_workload_identity_bindings = false
+
+wif_pool_id       = "esarch-ci-prod"
+github_repository = "COG-GTM/ESarch"
+ci_allowed_refs   = ["refs/heads/master"]
+
+labels = {
+  team = "REPLACE_WITH_TEAM"
+}
