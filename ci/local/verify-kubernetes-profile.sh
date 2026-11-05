@@ -36,7 +36,7 @@ NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}
 mysql_q() { docker compose exec -T mysql mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "$2" "$1" 2>/dev/null; }
 mysql_root_q() { docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -B -e "$1"' sh "$1" 2>/dev/null; }
 
-# Exactly what the Deployment gets: ConfigMap keys + ExternalSecret keys (deploy/kubernetes/<app>/), nothing else.
+# Exactly what the Deployment gets: ConfigMap keys + ExternalSecret keys (deploy/helm/axon-trader, charts/<app>), nothing else.
 app_env() {
   local db=$1 db_host=$2 rabbit_host=$3 eureka=$4
   echo "SPRING_PROFILES_ACTIVE=kubernetes"

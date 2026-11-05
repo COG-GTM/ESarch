@@ -1,0 +1,6 @@
+apiVersion: v2
+name: trading-engine
+description: "Axon command side: aggregates, sagas and the order-matching engine."
+type: application
+version: 0.1.0
+appVersion: "latest"

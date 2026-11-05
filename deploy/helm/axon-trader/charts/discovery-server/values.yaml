@@ -1,0 +1,88 @@
+global:
+  image:
+    registry: ""
+    tag: ""
+
+image:
+  registry: ""
+  repository: esarch/discovery-server
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# One standalone Eureka server (no peer replication configured). Clients cache the registry, so a restart only pauses
+# new registrations; Recreate avoids two registries with diverging state.
+replicaCount: 1
+strategy:
+  type: Recreate
+containerPort: 8761
+service:
+  port: 8761
+terminationGracePeriodSeconds: 30
+
+springProfile: kubernetes
+database: {enabled: false}
+rabbitmq: {enabled: false}
+eureka: {enabled: false}
+cloudSqlProxy: {enabled: false}
+config: {}
+env: []
+secret:
+  enabled: false
+  name: ""
+  externalSecret: {enabled: false}
+
+serviceAccount:
+  create: true
+  name: ""
+  gcpServiceAccount: ""
+  automountToken: false
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 384Mi
+  limits:
+    memory: 512Mi
+
+probes:
+  startup:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 24
+  readiness:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 6
+  liveness:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+# A PDB on a single replica would block node drains; Eureka clients ride out the restart on their cached registry.
+podDisruptionBudget:
+  enabled: false
+autoscaling:
+  enabled: false
+
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

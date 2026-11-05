@@ -1,0 +1,81 @@
+# prod: helm upgrade --install axon-trader deploy/helm/axon-trader -n axon-trader -f deploy/helm/axon-trader/values-prod.yaml
+# The UPPER_CASE placeholders come from the Terraform outputs of infra/terraform/envs/prod (same values as
+# infra/k8s/overlays/prod/cluster.env) and are passed with --set by the deploy job; the chart never holds credentials.
+# Applies on top of infra/k8s/overlays/prod, which owns the namespace, default-deny-ingress, the Gateway with the
+# Google-managed certificate, the SecretStores and the trader-app / trading-engine Workload Identity KSAs.
+global:
+  image:
+    registry: ARTIFACT_REGISTRY_URL # artifact_registry_url
+    tag: IMAGE_TAG # git SHA published by .github/workflows/ci.yml
+
+trading-engine: &axonApp
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      memory: 1536Mi
+  cloudSqlProxy:
+    instanceConnectionName: CLOUDSQL_INSTANCE_CONNECTION_NAME # backing-services instance_connection_name
+  # infra/k8s/platform/serviceaccounts.yaml already has the KSA (the SecretStores and RabbitMQ's ExternalSecret need it
+  # before this release exists), annotated with service_account_emails["trading-engine"].
+  serviceAccount:
+    create: false
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app.kubernetes.io/name: '{{ .Chart.Name }}'
+
+# trading-engine stays at one replica (see charts/trading-engine/values.yaml, replicaCount); only trader-app scales.
+trader-app:
+  <<: *axonApp
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+
+discovery-server:
+  # More headroom than staging: every app replica renews its lease every few seconds. Still one replica.
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      memory: 768Mi
+
+trader-ui:
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+
+# The platform Gateway's listeners carry no hostname, so the route matches whatever name the Google-managed
+# certificate covers; set route.hostnames to pin it.
+route:
+  hostnames: []
+
+networkPolicy:
+  mysql:
+    port: 3307
+    peers:
+      # Cloud SQL private services access range (gcloud compute addresses describe <prefix>-prod-psa --global).
+      - ipBlock: {cidr: CLOUDSQL_PSA_CIDR}
+  extraEgress:
+    # Workload Identity: the GKE metadata server (Dataplane V2 serves it on 169.254.169.252:988 too).
+    - to:
+        - ipBlock: {cidr: 169.254.169.254/32}
+        - ipBlock: {cidr: 169.254.169.252/32}
+      ports:
+        - {port: 80, protocol: TCP}
+        - {port: 988, protocol: TCP}
+    # Google APIs over Private Google Access (sqladmin for the Auth Proxy's ephemeral certificates). Public Google
+    # ranges only: RFC 1918 stays limited to the rules above.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16]
+      ports:
+        - {port: 443, protocol: TCP}

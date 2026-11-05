@@ -1,0 +1,38 @@
+{{- if .Values.route.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: axon-trader
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.route.parentRefs | nindent 4 }}
+  {{- with .Values.route.hostnames }}
+  hostnames:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  rules:
+    {{- range .Values.route.apiPrefixes }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/{{ . }}
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /{{ . }}
+      backendRefs:
+        - name: trader-app
+          port: 8080
+    {{- end }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: trader-ui
+          port: 8080
+{{- end }}

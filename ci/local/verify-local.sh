@@ -122,7 +122,7 @@ if [ -n "$PROXY_URL" ]; then
   check "deep link reload" 200 /dashboard '<div id="root">'
   check "runtime config" 200 /config.js 'AXON_TRADER_CONFIG'
   check "API same-origin under /api" 200 /api/query/user '"userName":"allard"'
-  check "actuator not routed" 404 /api/actuator/health 'not routed'
+  check "actuator not routed" 404 /api/actuator/health 'not routed\|not by the UI'
 fi
 
 if [ "$newman_status" -ne 0 ]; then

@@ -1,0 +1,34 @@
+name: helm
+
+on:
+  pull_request:
+    paths:
+      - "deploy/helm/**"
+      - "ci/kind/values-kind*.yaml"
+      - ".github/workflows/helm.yml"
+  push:
+    branches: [master]
+    paths:
+      - "deploy/helm/**"
+      - "ci/kind/values-kind*.yaml"
+      - ".github/workflows/helm.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install helm, kubeconform
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSfL --retry 6 --retry-all-errors --retry-delay 10 https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar xz --strip-components=1 -C "$HOME/bin" linux-amd64/helm
+          curl -sSfL --retry 6 --retry-all-errors --retry-delay 10 https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: helm lint + helm template | kubeconform
+        run: deploy/helm/scripts/validate.sh

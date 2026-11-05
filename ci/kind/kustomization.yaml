@@ -1,37 +1,14 @@
-# Throwaway kind stand-in for the s3.5 Helm chart, used by ci/kind/verify-axon-routing.sh: the real discovery-server
-# manifests from deploy/kubernetes/, MySQL and RabbitMQ in place of Cloud SQL / CloudAMQP, and two replicas of each app
-# with ConfigMaps carrying the same keys as deploy/kubernetes/<app>/configmap.yaml. The Secrets (random passwords) are
-# created by the script, never committed.
+# kind stand-ins for the backing services the axon-trader Helm chart expects (ci/kind/setup.sh): MySQL 5.7 for Cloud
+# SQL and RabbitMQ 3.7 for the RabbitMQ operator cluster. The apps themselves come from deploy/helm/axon-trader with
+# ci/kind/values-kind.yaml. The Secrets (random passwords) are created by the script, never committed.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: axon-trader
 resources:
-  - ../../deploy/kubernetes/discovery-server
   - backing-services.yaml
-  - apps.yaml
 generatorOptions:
   disableNameSuffixHash: true
 configMapGenerator:
-  - name: trader-app-config
-    literals:
-      - SPRING_PROFILES_ACTIVE=kubernetes
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/appdb?useSSL=true&requireSSL=true&enabledTLSProtocols=TLSv1.2&verifyServerCertificate=false
-      - SPRING_DATASOURCE_USERNAME=trader
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=axon-trader
-      - SPRING_RABBITMQ_VIRTUAL_HOST=/
-      - EUREKA_DEFAULT_ZONE=http://discovery-server:8761/eureka/
-  - name: trading-engine-config
-    literals:
-      - SPRING_PROFILES_ACTIVE=kubernetes
-      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/enginedb?useSSL=true&requireSSL=true&enabledTLSProtocols=TLSv1.2&verifyServerCertificate=false
-      - SPRING_DATASOURCE_USERNAME=trader
-      - SPRING_RABBITMQ_HOST=rabbitmq
-      - SPRING_RABBITMQ_PORT=5672
-      - SPRING_RABBITMQ_USERNAME=axon-trader
-      - SPRING_RABBITMQ_VIRTUAL_HOST=/
-      - EUREKA_DEFAULT_ZONE=http://discovery-server:8761/eureka/
   - name: mysql-initdb
     literals:
       - |

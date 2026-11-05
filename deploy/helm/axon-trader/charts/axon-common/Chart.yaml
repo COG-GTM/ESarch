@@ -1,0 +1,5 @@
+apiVersion: v2
+name: axon-common
+description: Shared templates for the Axon Trader service subcharts (Deployment, Service, ConfigMap, ExternalSecret, ServiceAccount, PDB, HPA).
+type: library
+version: 0.1.0

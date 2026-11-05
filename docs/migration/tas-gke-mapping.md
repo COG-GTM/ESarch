@@ -117,7 +117,7 @@ The stale `cf us esrefarch-demo-trader-ui config` in `teardown.sh` L71 has no GK
 | NET-5 | Cross-origin browser → API calls (`@CrossOrigin("*")`) | Same-origin through the Ingress (CHG-11), so CORS is no longer needed. Leave `@CrossOrigin` in place in p3 for rollback safety; s5.4 decides whether to narrow it | s3.4, s5.4 | `CommandController.java`, `QueryController.java` (only if s5.4 narrows CORS) |
 | NET-6 | Long-lived SSE `/query/subscribe/order-book/{id}` through the TAS router | GKE Ingress (external Application Load Balancer) with a `BackendConfig` on the `trader-app` Service setting `timeoutSec` well above the expected stream lifetime (the default backend timeout is 30 s). Load test the stream in s5.2 | s3.5 (s5.2 verifies) | `deploy/helm/` |
 
-Allowances that NET-1/NET-2 need under default-deny (owner s3.5, verified on staging in s5.1 and s5.4):
+Allowances that NET-1/NET-2 need under default-deny (owner s3.5, verified on staging in s5.1 and s5.4). **Done (s3.5):** `deploy/helm/axon-trader/templates/networkpolicy.yaml` (`axon-command-bus` for NET-1/NET-2, `discovery-server`, `gateway-to-frontends`, `axon-apps-egress`, `trader-ui-egress`); probed on kind by `ci/kind/verify-helm-smoke.sh`, staging still owed:
 
 | Direction | Source → destination | Port | Why |
 |---|---|---|---|

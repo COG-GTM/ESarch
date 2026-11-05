@@ -1,0 +1,19 @@
+# Adds the HTTPRoute on kind, attached to a chart-owned Gateway on Envoy Gateway (installed by ci/kind/setup.sh with
+# ESARCH_KIND_GATEWAY=1), so the / -> trader-ui and /api/{command,query} -> trader-app routing is exercised as on GKE.
+route:
+  enabled: true
+  parentRefs:
+    - name: axon-trader
+      sectionName: http
+gateway:
+  create: true
+  className: envoy-gateway
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+networkPolicy:
+  gatewayPeers:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: envoy-gateway-system

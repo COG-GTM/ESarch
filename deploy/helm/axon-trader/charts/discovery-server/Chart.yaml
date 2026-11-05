@@ -1,0 +1,6 @@
+apiVersion: v2
+name: discovery-server
+description: "In-cluster Eureka that replaces the TAS service registry; Axon routes commands with its metadata."
+type: application
+version: 0.1.0
+appVersion: "latest"

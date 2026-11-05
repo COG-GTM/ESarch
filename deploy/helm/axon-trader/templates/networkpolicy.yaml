@@ -1,0 +1,142 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $np := .Values.networkPolicy }}
+{{- if $np.defaultDenyIngress }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+{{- end }}
+---
+# Replaces both TAS rules (deploy-backend.sh):
+#   cf add-network-policy trader-app --destination-app trading-engine
+#   cf add-network-policy trading-engine --destination-app trader-app
+# Axon's DistributedCommandBus (SpringHttpCommandBusConnector) posts commands to the owning replica's pod IP on 8080.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: axon-command-bus
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  {{- include "axon-trader.axonApps" . | nindent 2 }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - {{- include "axon-trader.axonApps" . | nindent 10 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Eureka (replaces the p-service-registry binding): only the two Axon apps register and fetch. The server neither
+# registers nor fetches (application-kubernetes.properties), so its only egress is DNS.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: discovery-server
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: discovery-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - {{- include "axon-trader.axonApps" . | nindent 10 }}
+      ports:
+        - port: 8761
+          protocol: TCP
+  egress:
+    - to:
+        {{- toYaml $np.dns | nindent 8 }}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+---
+# North-south: only the Gateway reaches the UI and the API (trader-app); trading-engine has no public route.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: gateway-to-frontends
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [trader-ui, trader-app]}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        {{- toYaml $np.gatewayPeers | nindent 8 }}
+      ports:
+        - port: 8080
+          protocol: TCP
+---
+# Egress allow-list for the Axon apps: each other, Eureka, MySQL, RabbitMQ and DNS - nothing else.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: axon-apps-egress
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  {{- include "axon-trader.axonApps" . | nindent 2 }}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - {{- include "axon-trader.axonApps" . | nindent 10 }}
+      ports:
+        - {port: 8080, protocol: TCP}
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: discovery-server
+      ports:
+        - {port: 8761, protocol: TCP}
+    {{- with $np.mysql.peers }}
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - {port: {{ $np.mysql.port }}, protocol: TCP}
+    {{- end }}
+    {{- with $np.rabbitmq.peers }}
+    - to:
+        {{- toYaml . | nindent 8 }}
+      ports:
+        - {port: {{ $np.rabbitmq.port }}, protocol: TCP}
+    {{- end }}
+    - to:
+        {{- toYaml $np.dns | nindent 8 }}
+      ports:
+        - {port: 53, protocol: UDP}
+        - {port: 53, protocol: TCP}
+    {{- with $np.extraEgress }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+---
+# The UI is static files: no outbound connections at all.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: trader-ui-egress
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: trader-ui
+  policyTypes:
+    - Egress
+{{- end }}

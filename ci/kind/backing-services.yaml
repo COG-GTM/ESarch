@@ -84,3 +84,24 @@ spec:
   selector: {app.kubernetes.io/name: rabbitmq}
   ports:
     - port: 5672
+---
+# values-kind.yaml turns on the namespace default-deny-ingress, as the GKE platform has: the stand-ins accept only
+# the two Axon apps (the RabbitMQ operator component and Cloud SQL's private range play this part on GKE).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backing-services-from-axon-apps
+spec:
+  podSelector:
+    matchExpressions:
+      - {key: app.kubernetes.io/name, operator: In, values: [mysql, rabbitmq]}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - {key: app.kubernetes.io/name, operator: In, values: [trader-app, trading-engine]}
+      ports:
+        - {port: 3306, protocol: TCP}
+        - {port: 5672, protocol: TCP}

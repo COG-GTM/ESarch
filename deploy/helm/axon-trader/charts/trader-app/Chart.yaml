@@ -1,0 +1,6 @@
+apiVersion: v2
+name: trader-app
+description: "Axon query side and REST API behind /api, plus the user-facing projections."
+type: application
+version: 0.1.0
+appVersion: "latest"

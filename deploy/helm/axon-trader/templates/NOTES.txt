@@ -1,0 +1,6 @@
+Axon Trader {{ .Chart.AppVersion }} installed in namespace {{ .Release.Namespace }}.
+
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/discovery-server deploy/trading-engine deploy/trader-app deploy/trader-ui
+{{- if .Values.route.enabled }}
+  kubectl -n {{ .Release.Namespace }} get httproute axon-trader -o jsonpath='{.status.parents[*].conditions}'
+{{- end }}

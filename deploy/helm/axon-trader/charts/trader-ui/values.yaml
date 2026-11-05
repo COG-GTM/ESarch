@@ -1,0 +1,86 @@
+global:
+  image:
+    registry: ""
+    tag: ""
+
+image:
+  registry: ""
+  repository: esarch/trader-ui
+  tag: ""
+  pullPolicy: IfNotPresent
+
+replicaCount: 2
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+containerPort: 8080
+service:
+  port: 8080
+terminationGracePeriodSeconds: 15
+
+# Static SPA: no Spring profile, no backing services, no secrets. /api is answered by the Gateway, not by nginx.
+springProfile: ""
+database: {enabled: false}
+rabbitmq: {enabled: false}
+eureka: {enabled: false}
+cloudSqlProxy: {enabled: false}
+config: {}
+env: []
+secret:
+  enabled: false
+  name: ""
+  externalSecret: {enabled: false}
+
+serviceAccount:
+  create: true
+  name: ""
+  gcpServiceAccount: ""
+  automountToken: false
+
+# nginx-unprivileged runs as 101 and keeps its pid and temp files under /tmp (emptyDir), so the root fs stays read-only.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 128Mi
+
+probes:
+  readiness:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 5
+    failureThreshold: 3
+  liveness:
+    httpGet: {path: /healthz, port: http}
+    periodSeconds: 20
+    failureThreshold: 3
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 70
+
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

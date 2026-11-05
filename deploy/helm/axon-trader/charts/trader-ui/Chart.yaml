@@ -1,0 +1,6 @@
+apiVersion: v2
+name: trader-ui
+description: "nginx serving the React SPA at /."
+type: application
+version: 0.1.0
+appVersion: "latest"
