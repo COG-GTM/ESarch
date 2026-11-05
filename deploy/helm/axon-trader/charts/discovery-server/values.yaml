@@ -7,6 +7,8 @@ image:
   registry: ""
   repository: esarch/discovery-server
   tag: ""
+  # sha256:... digest published by .github/workflows/ci.yml; pins the image and takes precedence over tag.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # One standalone Eureka server (no peer replication configured). Clients cache the registry, so a restart only pauses

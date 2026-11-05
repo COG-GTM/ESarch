@@ -7,6 +7,8 @@ image:
   registry: ""
   repository: esarch/trading-engine
   tag: ""
+  # sha256:... digest published by .github/workflows/ci.yml; pins the image and takes precedence over tag.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # One replica, as on TAS (APP-1). With more than one, the trade sagas lose events: a saga started on one pod is

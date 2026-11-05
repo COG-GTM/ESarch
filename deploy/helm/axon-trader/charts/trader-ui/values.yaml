@@ -7,6 +7,8 @@ image:
   registry: ""
   repository: esarch/trader-ui
   tag: ""
+  # sha256:... digest published by .github/workflows/ci.yml; pins the image and takes precedence over tag.
+  digest: ""
   pullPolicy: IfNotPresent
 
 replicaCount: 2

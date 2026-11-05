@@ -4,6 +4,7 @@ name: ci
 # Publishing to Artifact Registry runs on master pushes only and is skipped until the repository variables
 # GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_CI_SERVICE_ACCOUNT and GCP_ARTIFACT_REGISTRY are set (terraform outputs
 # ci_workload_identity_provider, ci_service_account and artifact_registry_url of infra/terraform/envs/staging).
+# A successful push then deploys those digests to staging through .github/workflows/deploy-staging.yml (s4.2).
 
 on:
   pull_request:
@@ -166,6 +167,9 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      published: ${{ steps.push.outputs.published }}
+      digests: ${{ steps.push.outputs.digests }}
     env:
       WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
@@ -204,9 +208,11 @@ jobs:
           username: oauth2accesstoken
           password: ${{ steps.auth.outputs.access_token }}
       - name: Push the scanned images
+        id: push
         if: steps.config.outputs.enabled == 'true'
         run: |
           set -euo pipefail
+          digests='{}'
           {
             echo "### Pushed to $REGISTRY"
             echo
@@ -221,4 +227,20 @@ jobs:
             digest=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$target" | grep -F "$REGISTRY/$image@" | head -1)
             echo "$target -> ${digest#*@}"
             echo "| \`$target\` | \`${digest#*@}\` |" >> "$GITHUB_STEP_SUMMARY"
+            digests=$(jq -c --arg i "$image" --arg d "${digest#*@}" '. + {($i): $d}' <<<"$digests")
           done
+          echo "digests=$digests" >> "$GITHUB_OUTPUT"
+          echo "published=true" >> "$GITHUB_OUTPUT"
+
+  deploy-staging:
+    name: Deploy to staging
+    needs: publish
+    if: needs.publish.outputs.published == 'true'
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/deploy-staging.yml
+    with:
+      image-tag: ${{ github.sha }}
+      image-digests: ${{ needs.publish.outputs.digests }}
+    secrets: inherit

@@ -1,0 +1,137 @@
+name: deploy-staging
+
+# Deploys the images .github/workflows/ci.yml just pushed to Artifact Registry to the staging GKE cluster (s4.2,
+# replaces the Concourse deploy-* and smoke/e2e jobs): helm upgrade --install of deploy/helm/axon-trader with
+# values-staging.yaml and the image digests, rollout wait, Postman smoke (newman) and ci/tasks/e2e-test-both-sides.sh.
+# Any failure runs helm rollback to the previous revision and fails the run (ci/deploy/helm-deploy.sh, proved offline by
+# ci/kind/verify-deploy-rollback.sh). Results go to the run summary and to Slack.
+#
+# Called by ci.yml after a master push publishes images; workflow_dispatch redeploys a published tag + digests.
+# Skipped with a notice until these repository variables are set (terraform outputs of infra/terraform/envs/staging):
+#   GCP_WORKLOAD_IDENTITY_PROVIDER  ci_workload_identity_provider
+#   GCP_CI_SERVICE_ACCOUNT          ci_service_account (roles/container.developer)
+#   GCP_ARTIFACT_REGISTRY           artifact_registry_url
+#   GKE_CLUSTER                     projects/<project>/locations/<gke_cluster_location>/clusters/<gke_cluster_name>
+# and then needs:
+#   STAGING_CLOUDSQL_INSTANCE_CONNECTION_NAME  cloudsql_instance_connection_name
+#   STAGING_CLOUDSQL_PSA_CIDR                  private services access range of the Cloud SQL instance
+#   STAGING_URL                                https://<staging host> served by the platform Gateway (gateway_address)
+# Optional secret SLACK_WEBHOOK_URL (Concourse's slack-alert resource). Google auth is Workload Identity Federation only.
+
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        description: Git SHA the images were tagged with
+        type: string
+        required: true
+      image-digests:
+        description: 'JSON {"<service>": "sha256:..."} for trading-engine, trader-app, discovery-server and trader-ui'
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      image-tag:
+        description: Git SHA the images were tagged with
+        type: string
+        required: true
+      image-digests:
+        description: 'JSON {"<service>": "sha256:..."} (the publish job summary of that ci run)'
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: helm upgrade + smoke + e2e (rollback on failure)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+      REGISTRY: ${{ vars.GCP_ARTIFACT_REGISTRY }}
+      GKE_CLUSTER: ${{ vars.GKE_CLUSTER }}
+      CLOUDSQL_INSTANCE: ${{ vars.STAGING_CLOUDSQL_INSTANCE_CONNECTION_NAME }}
+      CLOUDSQL_PSA_CIDR: ${{ vars.STAGING_CLOUDSQL_PSA_CIDR }}
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      IMAGE_TAG: ${{ inputs.image-tag }}
+      IMAGE_DIGESTS: ${{ inputs.image-digests }}
+    steps:
+      - name: Check the GCP variables
+        id: config
+        run: |
+          if [ -n "$WIF_PROVIDER" ] && [ -n "$CI_SERVICE_ACCOUNT" ] && [ -n "$REGISTRY" ] && [ -n "$GKE_CLUSTER" ]; then
+            missing=""
+            for v in CLOUDSQL_INSTANCE CLOUDSQL_PSA_CIDR STAGING_URL; do [ -n "${!v}" ] || missing="$missing $v"; done
+            if [ -n "$missing" ]; then
+              echo "::error::staging deploy needs STAGING_CLOUDSQL_INSTANCE_CONNECTION_NAME, STAGING_CLOUDSQL_PSA_CIDR and STAGING_URL (unset:$missing)"
+              exit 1
+            fi
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            msg="Staging deploy skipped: set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_CI_SERVICE_ACCOUNT, GCP_ARTIFACT_REGISTRY and GKE_CLUSTER (terraform outputs of infra/terraform/envs/staging)."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.config.outputs.enabled == 'true'
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        if: steps.config.outputs.enabled == 'true'
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+      - name: GKE credentials
+        if: steps.config.outputs.enabled == 'true'
+        uses: google-github-actions/get-gke-credentials@64bc7249bbcf78056bb92f14d3cedc2da193946c # v2.3.5
+        with:
+          cluster_name: ${{ vars.GKE_CLUSTER }}
+      - name: Deploy, smoke, e2e (helm rollback on failure)
+        id: deploy
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          SMOKE_LOGS: ${{ runner.temp }}/smoke
+        run: |
+          IMAGE_REGISTRY="$REGISTRY" PUBLIC_URL="$STAGING_URL" bash ci/deploy/helm-deploy.sh \
+            -f deploy/helm/axon-trader/values-staging.yaml \
+            --set "trading-engine.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
+            --set "trader-app.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
+            --set "networkPolicy.mysql.peers[0].ipBlock.cidr=$CLOUDSQL_PSA_CIDR"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always() && steps.config.outputs.enabled == 'true'
+        with:
+          name: staging-smoke
+          path: ${{ runner.temp }}/smoke
+          if-no-files-found: ignore
+      - name: Slack
+        if: always() && steps.config.outputs.enabled == 'true'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OUTCOME: ${{ steps.deploy.outcome }}
+          RESULT: ${{ steps.deploy.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::notice::Slack notification skipped: set the repository secret SLACK_WEBHOOK_URL."
+            exit 0
+          fi
+          case "$OUTCOME/$RESULT" in
+            success/*) text=":white_check_mark: Staging deploy of \`${IMAGE_TAG:0:7}\` _passed_ (helm upgrade, smoke, e2e): <$RUN_URL|run>" ;;
+            */rolled-back-to-*) state="helm rolled back to revision ${RESULT#rolled-back-to-}" ;;
+            */rollback-failed) state="helm rollback FAILED, staging needs a look" ;;
+            */no-rollback) state="no earlier revision to roll back to" ;;
+            */not-deployed | skipped/*) state="failed before the helm upgrade, staging unchanged" ;;
+            *) state="deploy step died ($OUTCOME), staging state unknown" ;;
+          esac
+          [ "$OUTCOME" = success ] || text="<!here> *FAILED* :x: Staging deploy of \`${IMAGE_TAG:0:7}\` ($state): <$RUN_URL|run>"
+          jq -n --arg text "$text" '{text: $text}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL" >/dev/null

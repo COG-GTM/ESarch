@@ -133,6 +133,8 @@ Allowances that NET-1/NET-2 need under default-deny (owner s3.5, verified on sta
 
 ## 8. Delivery: Concourse
 
+**Done (s4.2), staging run still owed:** `.github/workflows/deploy-staging.yml`, called by `ci.yml` after `publish` pushes images, deploys their digests with `ci/deploy/helm-deploy.sh` (helm upgrade --install, rollout wait, `ci/deploy/smoke.sh`: newman smoke and `e2e-test-both-sides.sh` over `kubectl port-forward` plus the public `/api/command/api` route; `helm rollback` on any failure) and posts to Slack (`SLACK_WEBHOOK_URL`). Skipped with a notice until `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_CI_SERVICE_ACCOUNT`, `GCP_ARTIFACT_REGISTRY` and `GKE_CLUSTER` are set. Proved offline by `ci/kind/verify-deploy-rollback.sh` (CI-5, CI-6, CI-7, CI-10).
+
 | ID | TAS item | GKE target | Owner | Files that change |
 |---|---|---|---|---|
 | CI-1 | `just-build-it` manual gate | Dropped. Builds run on every PR and merge; production promotion is the manual gate (s4.3) | s4.1 | `ci/pipeline.yml` deleted in s6.4 |

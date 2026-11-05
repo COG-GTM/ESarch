@@ -7,6 +7,8 @@ image:
   registry: ""
   repository: esarch/trader-app
   tag: ""
+  # sha256:... digest published by .github/workflows/ci.yml; pins the image and takes precedence over tag.
+  digest: ""
   pullPolicy: IfNotPresent
 
 # Ignored when autoscaling.enabled (the HPA owns the replica count). Axon's DistributedCommandBus needs every replica

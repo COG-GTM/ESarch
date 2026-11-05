@@ -1,4 +1,4 @@
-# Sourced by verify-axon-routing.sh and verify-helm-smoke.sh (expects CLUSTER, NS, k and fail from the caller).
+# Sourced by verify-axon-routing.sh, verify-helm-smoke.sh and verify-deploy-rollback.sh (expects CLUSTER, NS, k and fail from the caller).
 # kind_setup: kind cluster, local images, throwaway Secrets, the MySQL/RabbitMQ stand-ins (ci/kind/kustomization.yaml),
 # then `helm upgrade --install` of deploy/helm/axon-trader with ci/kind/values-kind.yaml. With ESARCH_KIND_GATEWAY=1
 # it also installs Envoy Gateway and renders the chart's Gateway + HTTPRoute (ci/kind/values-kind-gateway.yaml).
@@ -37,6 +37,13 @@ kind_cluster() {
   done
 }
 
+# kind_backing: the MySQL and RabbitMQ stand-ins only (verify-deploy-rollback.sh installs the chart itself).
+kind_backing() {
+  echo "== MySQL and RabbitMQ stand-ins"
+  k apply -k ci/kind
+  for d in mysql rabbitmq; do k rollout status "deploy/$d" --timeout=600s; done
+}
+
 # kind_install: stand-ins and the chart, on a cluster with the namespace and Secrets in place.
 kind_install() {
   local values=(-f ci/kind/values-kind.yaml)
@@ -56,9 +63,7 @@ YAML
     values+=(-f ci/kind/values-kind-gateway.yaml)
   fi
 
-  echo "== MySQL and RabbitMQ stand-ins"
-  k apply -k ci/kind
-  for d in mysql rabbitmq; do k rollout status "deploy/$d" --timeout=600s; done
+  kind_backing
 
   # shellcheck disable=SC2206
   values+=(${ESARCH_HELM_ARGS:-})

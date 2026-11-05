@@ -28,7 +28,8 @@ helm.sh/chart: {{ printf "%s-%s" .Chart.Name .Chart.Version }}
 {{- define "axon-common.image" -}}
 {{- $registry := .Values.image.registry | default .Values.global.image.registry -}}
 {{- $repo := .Values.image.repository -}}
-{{- if $registry }}{{ printf "%s/%s:%s" $registry $repo (include "axon-common.imageTag" .) }}{{ else }}{{ printf "%s:%s" $repo (include "axon-common.imageTag" .) }}{{ end -}}
+{{- $name := ternary (printf "%s/%s" $registry $repo) $repo (ne $registry "") -}}
+{{- if .Values.image.digest }}{{ printf "%s@%s" $name .Values.image.digest }}{{ else }}{{ printf "%s:%s" $name (include "axon-common.imageTag" .) }}{{ end -}}
 {{- end -}}
 
 {{- define "axon-common.serviceAccountName" -}}
