@@ -34,12 +34,14 @@ docker compose up -d --wait
 NETWORK=$(docker inspect -f '{{range $k, $v := .NetworkSettings.Networks}}{{$k}}{{end}}' "$(docker compose ps -q mysql)")
 
 mysql_q() { docker compose exec -T mysql mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "$2" "$1" 2>/dev/null; }
+mysql_root_q() { docker compose exec -T mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -N -B -e "$1"' sh "$1" 2>/dev/null; }
 
 # Exactly what the Deployment gets: ConfigMap keys + ExternalSecret keys (deploy/kubernetes/<app>/), nothing else.
 app_env() {
   local db=$1 db_host=$2 rabbit_host=$3 eureka=$4
   echo "SPRING_PROFILES_ACTIVE=kubernetes"
-  echo "SPRING_DATASOURCE_URL=jdbc:mysql://$db_host:3306/$db?useSSL=false&allowPublicKeyRetrieval=true"
+  # TLS required as in the ConfigMap; the compose MySQL's self-signed certs stand in for Cloud SQL, so no CA verification here.
+  echo "SPRING_DATASOURCE_URL=jdbc:mysql://$db_host:3306/$db?useSSL=true&requireSSL=true&enabledTLSProtocols=TLSv1.2&verifyServerCertificate=false"
   echo "SPRING_DATASOURCE_USERNAME=$MYSQL_USER"
   echo "SPRING_DATASOURCE_PASSWORD=$MYSQL_PASSWORD"
   echo "SPRING_RABBITMQ_HOST=$rabbit_host"
@@ -117,6 +119,10 @@ grep -h "Successfully applied\|Successfully baselined\|Schema .* is up to date" 
 for url in "$APP_URL" "$ENGINE_URL"; do
   echo "$url/actuator/prometheus: $(curl -sf "$url/actuator/prometheus" | grep -c '^jvm_memory_used_bytes') jvm_memory_used_bytes series, $(curl -sf "$url/actuator/prometheus" | grep -m1 '^hikaricp_connections_active')"
 done
+tls=$(mysql_root_q "select concat(sum(s.variable_value <> ''), ' ', sum(s.variable_value = ''), ' ', ifnull(max(s.variable_value), '')) from performance_schema.threads t join performance_schema.status_by_thread s on s.thread_id = t.thread_id and s.variable_name = 'Ssl_version' where t.processlist_user = '$MYSQL_USER'")
+read -r tls_count plain_count tls_version <<<"$tls"
+echo "app connections to MySQL: ${tls_count:-0} over TLS ($tls_version), ${plain_count:-0} plaintext"
+[ "${tls_count:-0}" -gt 0 ] && [ "${plain_count:-0}" = 0 ] || { echo "app connections to MySQL are not all TLS" >&2; exit 1; }
 echo "trader-app exposed endpoints: $(curl -sf "$APP_URL/actuator" | jq -c '._links | keys')"
 echo "trading-engine exposed endpoints: $(curl -sf "$ENGINE_URL/actuator" | jq -c '._links | keys')"
 
