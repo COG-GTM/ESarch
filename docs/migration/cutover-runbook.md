@@ -43,16 +43,17 @@ Only rows are copied. The schema on Cloud SQL is the Flyway V1 baseline (s3.2), 
 
 | # | Step | Command / check |
 |---|---|---|
-| 1 | Stop writes on TAS: stop the traffic, then both apps | `cf stop trader-app`, `cf stop trading-engine` (service instances stay up) |
-| 2 | Make sure no trade is in flight | the RabbitMQ `trades` queue is empty before stopping `trading-engine`, and both event counts no longer change |
-| 3 | Preflight, both databases | `tools/migrate-data/preflight.sh` |
-| 4 | Final copy (`TARGET_WIPE=yes` if the target holds a previous rehearsal copy) | `tools/migrate-data/copy.sh all` |
-| 5 | Verify: every line `OK`, `0 mismatches` | `tools/migrate-data/verify.sh` |
-| 6 | Start GKE on the copy | scale `trading-engine`, then `trader-app` up; logs show `Schema ... is up to date` and no `SchemaManagementException` |
-| 7 | Smoke test (s6.3): log in as an existing user, the portfolio and transactions match TAS, place a trade | |
-| 8 | Keep the dump files on the encrypted host until the rollback window closes, then delete them | `rm -rf target/migrate-data` |
+| 1 | Stop new writes on TAS, apps still running: take the routes off (maintenance page) so no command reaches `trader-app` | `cf unmap-route trader-app ...` (keep both apps up: `trader-app` is the consumer of the `trades` queue that `trading-engine` publishes to) |
+| 2 | Drain: wait until no trade is in flight | the `trades` queue shows `messages` (ready + unacknowledged) = 0, and `select count(*) from domain_event_entry` stops changing in both databases (what `rehearse.sh` waits for before stopping the apps) |
+| 3 | Stop both apps (service instances stay up) | `cf stop trader-app`, `cf stop trading-engine`; check the `trades` queue is still at 0 |
+| 4 | Preflight, both databases | `tools/migrate-data/preflight.sh` |
+| 5 | Final copy (`TARGET_WIPE=yes` if the target holds a previous rehearsal copy) | `tools/migrate-data/copy.sh all` |
+| 6 | Verify: every line `OK`, `0 mismatches` | `tools/migrate-data/verify.sh` |
+| 7 | Start GKE on the copy | scale `trading-engine`, then `trader-app` up; logs show `Schema ... is up to date` and no `SchemaManagementException` |
+| 8 | Smoke test (s6.3): log in as an existing user, the portfolio and transactions match TAS, place a trade | |
+| 9 | Keep the dump files on the encrypted host until the rollback window closes, then delete them | `rm -rf target/migrate-data` |
 
-Rollback before step 6: start the TAS apps again; nothing was written on TAS. After step 6 the GKE side has new
+Rollback before step 7: start the TAS apps again; nothing was written on TAS. After step 7 the GKE side has new
 events that TAS does not have; rolling back means losing them, or a reverse copy into TAS that these
 tools do not do yet (`copy.sh load` insists on a Flyway-managed target). s6.2 decides which and rehearses it.
 
@@ -77,7 +78,7 @@ against the local stand-ins. What it needs from TAS, all to be confirmed with th
   and only start the apps if `validate` passes. Terraform's `modules/backing-services` then has to import or point
   at the promoted instance instead of creating its own (s2.3 follow-up).
 - **Sequence**: create connection profiles and the migration job (full dump + CDC) days before; monitor lag; in the
-  freeze stop the TAS apps (steps 1-2 above), wait for lag 0, run `verify.sh` with `TGT_*` pointing at the DMS
+  freeze stop the TAS apps (steps 1-3 above), wait for lag 0, run `verify.sh` with `TGT_*` pointing at the DMS
   replica, promote, start GKE.
 
 ### Freeze sizing (input to s6.2)
