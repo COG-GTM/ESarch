@@ -1,0 +1,55 @@
+# Local rehearsal of the s6.1 data copy (tools/migrate-data/rehearse.sh), off TAS and off GCP:
+#   source-mysql  MySQL 5.7, standing in for the TAS MySQL service instances (enginedb, appdb). Its schema is created
+#                 by the apps themselves with the `local` profile (ddl-auto=update), as ESarch-conf's `cloud` profile
+#                 does on TAS, and it keeps the image default character set (latin1).
+#   target-mysql  MySQL 8.0 standing in for Cloud SQL (modules/backing-services, MYSQL_8_0): TLS required, one user
+#                 per database confined to it as infra/k8s/scripts/cloudsql-grants.sh leaves them, schema from Flyway.
+#   rabbitmq      the broker both apps need; rehearse.sh recreates it between TAS and GKE (a fresh cluster on GKE).
+# Throwaway local passwords; override with the environment variables.
+name: esarch-migrate-data
+services:
+  source-mysql:
+    image: mysql:5.7
+    environment:
+      MYSQL_ROOT_PASSWORD: ${REHEARSAL_SOURCE_ROOT_PASSWORD:-root}
+      MYSQL_USER: trader
+      MYSQL_PASSWORD: ${REHEARSAL_SOURCE_PASSWORD:-trader}
+    ports:
+      - "127.0.0.1:${REHEARSAL_SOURCE_PORT:-3316}:3306"
+    volumes:
+      - ../../../docker/mysql/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  target-mysql:
+    image: mysql:8.0.46
+    command: ["--require-secure-transport=ON"]
+    environment:
+      MYSQL_ROOT_PASSWORD: ${REHEARSAL_TARGET_ROOT_PASSWORD:-root}
+      TRADING_ENGINE_PASSWORD: ${REHEARSAL_TARGET_ENGINE_PASSWORD:-trading-engine}
+      TRADER_APP_PASSWORD: ${REHEARSAL_TARGET_APP_PASSWORD:-trader-app}
+    ports:
+      - "127.0.0.1:${REHEARSAL_TARGET_PORT:-3317}:3306"
+    volumes:
+      - ./target-initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" -e 'select 1' >/dev/null 2>&1"]
+      interval: 3s
+      timeout: 5s
+      retries: 60
+
+  rabbitmq:
+    image: rabbitmq:3.7-management
+    environment:
+      RABBITMQ_DEFAULT_USER: trader
+      RABBITMQ_DEFAULT_PASS: ${REHEARSAL_RABBITMQ_PASSWORD:-trader}
+    ports:
+      - "127.0.0.1:5672:5672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 10s
+      retries: 30

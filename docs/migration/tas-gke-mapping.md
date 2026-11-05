@@ -24,7 +24,7 @@ Paths are relative to the repo root. `Lx` means line numbers on `master` at `577
 | p5 | s5.2 | Load test staging at production sizing |
 | p5 | s5.3 | Drill failures of pods, broker and database |
 | p5 | s5.4 | Review GKE security posture |
-| p6 | s6.1 | Copy event store and read models to Cloud SQL |
+| p6 | s6.1 | Copy event store and read models to Cloud SQL ([runbook](cutover-runbook.md#s61-copy-the-event-store-and-read-models-to-cloud-sql), `tools/migrate-data/`) |
 | p6 | s6.2 | Rehearse cutover and rollback on staging |
 | p6 | s6.3 | Cut production traffic over to GKE |
 | p6 | s6.4 | Decommission TAS apps and CF tooling |
