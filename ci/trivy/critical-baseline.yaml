@@ -1,0 +1,307 @@
+# Critical CVEs that already ship in the Spring Boot 2.0.3 / Java 8 / Axon 3 images (baseline taken 2026-11-05 with
+# Trivy 0.76.0). CI (.github/workflows/ci.yml) fails on any critical CVE that is NOT listed here, so a new dependency,
+# a new vulnerable version or a newly published CVE still breaks the build. Each entry is pinned to the exact package
+# version (purl): upgrading a library drops it out of the baseline instead of carrying the exception forward.
+# Most of these are only fixed in Spring Boot 2.5+/3.x, Spring Framework 6/7 and Tomcat 9+, i.e. a stack upgrade
+# beyond this migration; the whole file expires so the exception has to be revisited.
+# Regenerate with ci/trivy/baseline.sh (see there).
+vulnerabilities:
+  - id: CVE-2013-7285
+    purls:
+      - "pkg:maven/com.thoughtworks.xstream/xstream@1.4.10"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2016-1000027
+    purls:
+      - "pkg:maven/org.springframework/spring-web@5.0.7.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2017-15095
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2017-17485
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2017-7525
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2017-7657
+    purls:
+      - "pkg:maven/org.eclipse.jetty/jetty-server@9.2.24.v20180105"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2017-7658
+    purls:
+      - "pkg:maven/org.eclipse.jetty/jetty-server@9.2.24.v20180105"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-11307
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-14718
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-14719
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-14720
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-14721
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-19360
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-19361
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-19362
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-7489
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2018-8014
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-10173
+    purls:
+      - "pkg:maven/com.thoughtworks.xstream/xstream@1.4.10"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-10202
+    purls:
+      - "pkg:maven/org.codehaus.jackson/jackson-mapper-asl@1.9.13"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-14379
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-14540
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-16335
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-16942
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-16943
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-17267
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-17531
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-20330
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2019-20444
+    purls:
+      - "pkg:maven/io.netty/netty-codec-http@4.1.25.Final"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-10683
+    purls:
+      - "pkg:maven/dom4j/dom4j@1.6.1"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-1938
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-8840
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-9546
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-9547
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2020-9548
+    purls:
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.3.3"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.8.11"
+      - "pkg:maven/com.fasterxml.jackson.core/jackson-databind@2.9.6"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2021-42392
+    purls:
+      - "pkg:maven/com.h2database/h2@1.4.197"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2022-22965
+    purls:
+      - "pkg:maven/org.springframework.boot/spring-boot-starter-web@2.0.3.RELEASE"
+      - "pkg:maven/org.springframework.boot/spring-boot-starter-webflux@2.0.3.RELEASE"
+      - "pkg:maven/org.springframework/spring-beans@5.0.7.RELEASE"
+      - "pkg:maven/org.springframework/spring-webflux@5.0.7.RELEASE"
+      - "pkg:maven/org.springframework/spring-webmvc@5.0.7.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2022-22978
+    purls:
+      - "pkg:maven/org.springframework.security/spring-security-core@5.0.6.RELEASE"
+      - "pkg:maven/org.springframework.security/spring-security-web@5.0.6.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2022-23221
+    purls:
+      - "pkg:maven/com.h2database/h2@1.4.197"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2023-20873
+    purls:
+      - "pkg:maven/org.springframework.boot/spring-boot-actuator-autoconfigure@2.0.3.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2024-38821
+    purls:
+      - "pkg:maven/org.springframework.security/spring-security-web@5.0.6.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2025-24813
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-22732
+    purls:
+      - "pkg:maven/org.springframework.security/spring-security-web@5.0.6.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-41293
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-43512
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-43515
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-47884
+    purls:
+      - "pkg:maven/org.springframework/spring-webmvc@5.0.7.RELEASE"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-55276
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-65182
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-65905
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-68525
+    purls:
+      - "pkg:maven/org.apache.tomcat.embed/tomcat-embed-core@8.5.31"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-75595
+    purls:
+      - "pkg:maven/io.netty/netty-handler@4.1.25.Final"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01
+  - id: CVE-2026-84939
+    purls:
+      - "pkg:maven/org.freemarker/freemarker@2.3.28"
+    statement: pre-existing in the Boot 2.0.3 / Java 8 stack, accepted until the stack upgrade
+    expired_at: 2027-05-01

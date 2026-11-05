@@ -1,0 +1,224 @@
+name: ci
+
+# Build, test, scan and publish the four Axon Trader images (replaces the Concourse build-* jobs, which stay until p6).
+# Publishing to Artifact Registry runs on master pushes only and is skipped until the repository variables
+# GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_CI_SERVICE_ACCOUNT and GCP_ARTIFACT_REGISTRY are set (terraform outputs
+# ci_workload_identity_provider, ci_service_account and artifact_registry_url of infra/terraform/envs/staging).
+
+on:
+  pull_request:
+    paths-ignore:
+      - "docs/**"
+      - "infra/**"
+      - "**/*.md"
+      - ".github/workflows/terraform.yml"
+  push:
+    branches: [master]
+    paths-ignore:
+      - "docs/**"
+      - "infra/**"
+      - "**/*.md"
+      - ".github/workflows/terraform.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TRIVY_IMAGE: aquasec/trivy:0.76.0@sha256:2416d1f74045b57274df1a340eee6b510cacd73c66a6ccb8da092b117eb7d222
+  IMAGES: trading-engine trader-app discovery-server trader-ui
+
+jobs:
+  java:
+    name: mvnw verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - run: ./mvnw -B verify
+
+  ui:
+    name: UI npm test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: trader-app-ui
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: trader-app-ui/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm test
+        env:
+          CI: "true"
+      - run: npm run build
+
+  ui-smoke:
+    name: UI image behind the local proxy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: ci/local/smoke-ui-image.sh
+
+  images:
+    name: Build and scan images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4.9.1
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Build the Java images (Jib tarballs)
+        run: |
+          set -euo pipefail
+          ./mvnw -B -DskipTests -Dimage.tag="$GITHUB_SHA" package jib:buildTar
+          mkdir -p target/ci-images
+          for app in trading-engine trader-app discovery-server; do mv "$app/target/jib-image.tar" "target/ci-images/$app.tar"; done
+      - name: Build the UI image
+        run: |
+          set -euo pipefail
+          docker build -t "esarch/trader-ui:$GITHUB_SHA" trader-app-ui
+          docker save -o target/ci-images/trader-ui.tar "esarch/trader-ui:$GITHUB_SHA"
+      - name: Trivy scan (fails on critical CVEs not in ci/trivy/critical-baseline.yaml)
+        run: |
+          set -euo pipefail
+          mkdir -p target/trivy-reports "$HOME/.cache/trivy"
+          docker pull -q "$TRIVY_IMAGE" >/dev/null
+          trivy() {
+            docker run --rm -v "$PWD:/work" -w /work -v "$HOME/.cache/trivy:/root/.cache/trivy" "$TRIVY_IMAGE" \
+              image --scanners vuln --skip-version-check --quiet --format json "$@"
+          }
+          count() { jq "[.Results[]? | .Vulnerabilities[]? | select(.Severity == \"$2\")] | length" "$1"; }
+          {
+            echo "### Trivy scan (${TRIVY_IMAGE%@*})"
+            echo
+            echo "| Image | Critical (new) | Critical (baseline) | High | Gate |"
+            echo "|---|---|---|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          failed=0
+          for image in $IMAGES; do
+            tag="esarch/$image:${GITHUB_SHA:0:12}"
+            report="target/trivy-reports/$image.json"
+            gate="target/trivy-reports/$image-gate.json"
+            if ! trivy --input "target/ci-images/$image.tar" --severity CRITICAL,HIGH --output "$report" ||
+              ! trivy --input "target/ci-images/$image.tar" --severity CRITICAL --ignorefile ci/trivy/critical-baseline.yaml --output "$gate"; then
+              failed=1
+              echo "::error::Trivy could not scan $image"
+              echo "| $tag | ? | ? | ? | **ERROR** (scan failed) |" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            all=$(count "$report" CRITICAL)
+            new=$(count "$gate" CRITICAL)
+            high=$(count "$report" HIGH)
+            if [ "$new" -eq 0 ]; then
+              result=pass
+            else
+              result="**FAIL**"
+              failed=1
+              echo "::error::$image has $new critical CVE(s) not in ci/trivy/critical-baseline.yaml"
+              jq -r '.Results[]? | .Target as $t | .Vulnerabilities[]? | "\(.VulnerabilityID)  \(.PkgName) \(.InstalledVersion) -> \(.FixedVersion // "no fix")  (\($t))"' "$gate"
+            fi
+            echo "| $tag | $new | $((all - new)) | $high | $result |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          exit "$failed"
+      - name: Upload Trivy reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: trivy-reports
+          path: target/trivy-reports/
+          retention-days: 14
+      - name: Upload images for publishing
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master' && vars.GCP_ARTIFACT_REGISTRY != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: images
+          path: target/ci-images/
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    name: Push to Artifact Registry
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    needs: [java, ui, ui-smoke, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+      REGISTRY: ${{ vars.GCP_ARTIFACT_REGISTRY }}
+    steps:
+      - name: Check the GCP variables
+        id: config
+        run: |
+          if [ -n "$WIF_PROVIDER" ] && [ -n "$CI_SERVICE_ACCOUNT" ] && [ -n "$REGISTRY" ]; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+            echo "registry-host=${REGISTRY%%/*}" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            msg="Artifact Registry push skipped: set the repository variables GCP_WORKLOAD_IDENTITY_PROVIDER, GCP_CI_SERVICE_ACCOUNT and GCP_ARTIFACT_REGISTRY (terraform outputs of infra/terraform/envs/staging)."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          name: images
+          path: target/ci-images
+      - name: Authenticate to Google Cloud (Workload Identity Federation)
+        id: auth
+        if: steps.config.outputs.enabled == 'true'
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: false
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
+        if: steps.config.outputs.enabled == 'true'
+        with:
+          registry: ${{ steps.config.outputs.registry-host }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+      - name: Push the scanned images
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          {
+            echo "### Pushed to $REGISTRY"
+            echo
+            echo "| Image | Digest |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for image in $IMAGES; do
+            docker load -i "target/ci-images/$image.tar" >/dev/null
+            target="$REGISTRY/$image:$GITHUB_SHA"
+            docker tag "esarch/$image:$GITHUB_SHA" "$target"
+            docker push -q "$target" >/dev/null
+            digest=$(docker inspect --format '{{range .RepoDigests}}{{println .}}{{end}}' "$target" | grep -F "$REGISTRY/$image@" | head -1)
+            echo "$target -> ${digest#*@}"
+            echo "| \`$target\` | \`${digest#*@}\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
