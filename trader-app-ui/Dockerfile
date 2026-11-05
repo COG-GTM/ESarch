@@ -10,7 +10,11 @@ COPY src ./src
 COPY scripts ./scripts
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
+# Pick up Alpine security fixes released after the base image was built (CI fails the build on critical CVEs).
+USER root
+RUN apk upgrade --no-cache
+USER 101
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/build /usr/share/nginx/html
 # Runs as the image's unprivileged nginx user (uid 101) on 8080. To point the bundle at another API root, mount a

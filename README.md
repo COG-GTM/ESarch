@@ -223,6 +223,20 @@ The UI calls the API same-origin under `/api` by default. To point an image at a
 
 The backends bind to `127.0.0.1` only (the local profile has no auth in front of the trading API; set `ESARCH_BIND_ADDRESS` to change it). `ci/local/verify-local.sh` exits non-zero if newman, the e2e script or the portfolio check fails. It waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
 
+### [Optional] Continuous Integration on GitHub Actions (GKE delivery)
+
+`.github/workflows/ci.yml` runs on every pull request and on pushes to `master`: `./mvnw verify`, the UI `npm test` and build, the UI image smoke test (`ci/local/smoke-ui-image.sh`), then it builds the four images (`trading-engine`, `trader-app`, `discovery-server` with Jib, `trader-ui` with its Dockerfile) tagged with the full git SHA and scans them with Trivy. The scan fails on any critical CVE that is not in `ci/trivy/critical-baseline.yaml`, the pinned list of criticals already shipped by the Spring Boot 2.0.3 / Java 8 stack (each entry is tied to the exact package version and the file expires on 2027-05-01). The job summary has a per-image table and the JSON reports are uploaded as the `trivy-reports` artifact.
+
+On `master` the scanned images are pushed to Artifact Registry through Workload Identity Federation (no service account key). Set these repository variables from the outputs of `infra/terraform/envs/staging`; until all three are set the push job is skipped with a notice:
+
+| Variable | Terraform output | Example |
+|---|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `ci_workload_identity_provider` | `projects/123456789/locations/global/workloadIdentityPools/github/providers/github` |
+| `GCP_CI_SERVICE_ACCOUNT` | `ci_service_account` | `ci-publisher@my-project.iam.gserviceaccount.com` |
+| `GCP_ARTIFACT_REGISTRY` | `artifact_registry_url` | `europe-west1-docker.pkg.dev/my-project/esarch` |
+
+The pushed digests are listed in the publish job summary. The Concourse pipeline (`ci/pipeline.yml`) still exists alongside it.
+
 ## CQRS & Event Sourcing Architectural Overview
 
 CQRS on itself is a very simple pattern. It only prescribes that the component of an application that processes commands should be separated from the component that processes queries. Although this separation is very simple in and of itself, it provides a number of very powerful features when combined with other patterns. Axon provides the building blocks that make it easier to implement the different patterns that can be used in combination with CQRS.
