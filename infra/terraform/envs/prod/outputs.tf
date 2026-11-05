@@ -88,6 +88,7 @@ output "kustomize_env" {
     TRADING_ENGINE_GSA   = module.foundation.service_account_emails["trading-engine"]
     GATEWAY_ADDRESS_NAME = module.gke_platform.gateway_address_name
     CERT_MAP_NAME        = module.gke_platform.certificate_map_name
+    SSL_POLICY_NAME      = module.gke_platform.ssl_policy_name
     SMOKE_HOSTNAME       = var.gateway_hostnames[0]
     SMOKE_SECRET_ID      = module.gke_platform.smoke_test_secret_id
 

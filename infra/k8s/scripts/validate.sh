@@ -30,7 +30,7 @@ for target in addons/eso addons/cert-manager addons/rabbitmq-operator overlays/s
   echo "==> kustomize build ${target} | kubeconform"
   rendered="${work}/$(echo "${target}" | tr '/' '-').yaml"
   kustomize build --enable-helm "${work}/${target}" >"${rendered}"
-  if grep -nE '(PROJECT_ID|CLUSTER_NAME|CLUSTER_LOCATION|_GSA|GATEWAY_ADDRESS_NAME|CERT_MAP_NAME|SMOKE_HOSTNAME|SMOKE_SECRET_ID|CLOUDSQL_INSTANCE_CONNECTION_NAME)$' "${rendered}"; then
+  if grep -nE '(PROJECT_ID|CLUSTER_NAME|CLUSTER_LOCATION|_GSA|GATEWAY_ADDRESS_NAME|CERT_MAP_NAME|SSL_POLICY_NAME|SMOKE_HOSTNAME|SMOKE_SECRET_ID|CLOUDSQL_INSTANCE_CONNECTION_NAME)$' "${rendered}"; then
     echo "unreplaced cluster-env placeholder in ${target}" >&2
     exit 1
   fi

@@ -5,6 +5,8 @@ route:
   parentRefs:
     - name: axon-trader
       sectionName: http
+  # kind has no certificate: the stand-in Gateway is HTTP-only, so no HSTS (GKE serves the app on HTTPS only).
+  hsts: ""
 gateway:
   create: true
   className: envoy-gateway

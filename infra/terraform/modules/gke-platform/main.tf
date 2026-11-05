@@ -42,6 +42,16 @@ resource "google_certificate_manager_certificate_map" "gateway" {
   labels      = var.labels
 }
 
+# TLS 1.2+ with the MODERN profile on the Gateway's HTTPS proxy (GCPGatewayPolicy in infra/k8s/platform/gateway.yaml).
+# Without it the load balancer uses the COMPATIBLE profile and still accepts TLS 1.0/1.1.
+resource "google_compute_ssl_policy" "gateway" {
+  project         = var.project_id
+  name            = "${local.name}-gateway"
+  description     = "TLS policy of the ${var.environment} Gateway."
+  profile         = "MODERN"
+  min_tls_version = "TLS_1_2"
+}
+
 resource "google_certificate_manager_certificate_map_entry" "gateway" {
   for_each = toset(var.hostnames)
 

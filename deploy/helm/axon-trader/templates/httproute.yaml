@@ -24,6 +24,13 @@ spec:
             path:
               type: ReplacePrefixMatch
               replacePrefixMatch: /{{ . }}
+      {{- with $.Values.route.hsts }}
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: {{ . | quote }}
+      {{- end }}
       backendRefs:
         - name: trader-app
           port: 8080
@@ -32,6 +39,14 @@ spec:
         - path:
             type: PathPrefix
             value: /
+      {{- with .Values.route.hsts }}
+      filters:
+        - type: ResponseHeaderModifier
+          responseHeaderModifier:
+            set:
+              - name: Strict-Transport-Security
+                value: {{ . | quote }}
+      {{- end }}
       backendRefs:
         - name: trader-ui
           port: 8080
