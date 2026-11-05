@@ -63,6 +63,16 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_repository_id" {
+  description = "Numeric id of github_repository; pins CI authentication to that exact repository."
+  type        = string
+}
+
+variable "github_repository_owner_id" {
+  description = "Numeric id of the github_repository owner; pins CI authentication to that exact owner."
+  type        = string
+}
+
 variable "ci_allowed_refs" {
   description = "Git refs allowed to authenticate from CI; empty allows any ref."
   type        = list(string)

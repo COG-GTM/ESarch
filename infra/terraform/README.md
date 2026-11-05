@@ -28,7 +28,7 @@ infra/terraform/
 | Cloud NAT | `esarch-<env>-nat` | egress for private nodes, errors logged |
 | Artifact Registry | `<region>-docker.pkg.dev/<project>/esarch-<env>` | prod: immutable tags, cleanup enforced |
 | Secrets | `trader-app-db-password`, `trading-engine-db-password`, `rabbitmq-password` | values added out of band |
-| WIF | pool `var.wif_pool_id`, provider `github-actions` | only tokens from `var.github_repository` (and `var.ci_allowed_refs`) |
+| WIF | pool `var.wif_pool_id`, provider `github-actions` | only tokens from `var.github_repository` whose numeric `github_repository_id`/`github_repository_owner_id` also match (and `var.ci_allowed_refs`), so a re-created repo with the same name is rejected |
 
 ## Service accounts and grants
 
@@ -37,7 +37,7 @@ infra/terraform/
 | `<env>-gke-nodes` | `roles/container.defaultNodeServiceAccount` | `artifactregistry.reader` on the env repo |
 | `<env>-trader-app` | `roles/cloudsql.client` | `secretAccessor` on its DB password and `rabbitmq-password` |
 | `<env>-trading-engine` | `roles/cloudsql.client` | `secretAccessor` on its DB password and `rabbitmq-password` |
-| `<env>-ci-deployer` | `roles/container.developer` | `artifactregistry.writer` on the env repo; `workloadIdentityUser` for the repo principal set |
+| `<env>-ci-deployer` | `roles/container.developer` | `artifactregistry.writer` on the env repo; `workloadIdentityUser` for the `attribute.repository_id` principal set |
 
 The workload accounts are bound to the `axon-trader/trader-app` and `axon-trader/trading-engine`
 Kubernetes service accounts when `enable_gke_workload_identity_bindings = true`. Leave it `false`

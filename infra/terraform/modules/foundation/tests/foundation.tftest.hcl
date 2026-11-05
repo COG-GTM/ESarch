@@ -15,14 +15,16 @@ mock_provider "google" {
 }
 
 variables {
-  project_id        = "example-project"
-  region            = "us-central1"
-  environment       = "staging"
-  subnet_cidr       = "10.10.0.0/20"
-  pods_cidr         = "10.12.0.0/16"
-  services_cidr     = "10.13.0.0/20"
-  wif_pool_id       = "esarch-ci-test"
-  github_repository = "COG-GTM/ESarch"
+  project_id                 = "example-project"
+  region                     = "us-central1"
+  environment                = "staging"
+  subnet_cidr                = "10.10.0.0/20"
+  pods_cidr                  = "10.12.0.0/16"
+  services_cidr              = "10.13.0.0/20"
+  wif_pool_id                = "esarch-ci-test"
+  github_repository          = "COG-GTM/ESarch"
+  github_repository_id       = "1340826081"
+  github_repository_owner_id = "211054393"
 }
 
 run "foundation_defaults" {
@@ -69,12 +71,12 @@ run "foundation_defaults" {
   }
 
   assert {
-    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch'"
-    error_message = "WIF provider must be restricted to the repository."
+    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch' && assertion.repository_id == '1340826081' && assertion.repository_owner_id == '211054393'"
+    error_message = "WIF provider must be pinned to the repository name and immutable repository/owner ids."
   }
 
   assert {
-    condition     = module.ci_workload_identity.ci_principal_set == "principalSet://iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/esarch-ci-test/attribute.repository/COG-GTM/ESarch"
+    condition     = module.ci_workload_identity.ci_principal_set == "principalSet://iam.googleapis.com/projects/123/locations/global/workloadIdentityPools/esarch-ci-test/attribute.repository_id/1340826081"
     error_message = "CI impersonation must be scoped to the repository principalSet."
   }
 }
@@ -89,7 +91,7 @@ run "prod_ref_restriction_and_ksa_bindings" {
   }
 
   assert {
-    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch' && assertion.ref in ['refs/heads/master']"
+    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch' && assertion.repository_id == '1340826081' && assertion.repository_owner_id == '211054393' && assertion.ref in ['refs/heads/master']"
     error_message = "Ref restriction missing from the WIF attribute condition."
   }
 

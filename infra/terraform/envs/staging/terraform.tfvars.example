@@ -14,6 +14,9 @@ enable_gke_workload_identity_bindings = false
 
 wif_pool_id       = "esarch-ci-staging"
 github_repository = "COG-GTM/ESarch"
+# gh api repos/<owner>/<name> --jq '.id, .owner.id'
+github_repository_id       = "REPLACE_WITH_NUMERIC_REPOSITORY_ID"
+github_repository_owner_id = "REPLACE_WITH_NUMERIC_OWNER_ID"
 ci_allowed_refs   = []
 
 labels = {

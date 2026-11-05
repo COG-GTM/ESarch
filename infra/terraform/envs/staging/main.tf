@@ -19,7 +19,9 @@ module "foundation" {
   kubernetes_namespace                  = var.kubernetes_namespace
   enable_gke_workload_identity_bindings = var.enable_gke_workload_identity_bindings
 
-  wif_pool_id       = var.wif_pool_id
-  github_repository = var.github_repository
-  ci_allowed_refs   = var.ci_allowed_refs
+  wif_pool_id                = var.wif_pool_id
+  github_repository          = var.github_repository
+  github_repository_id       = var.github_repository_id
+  github_repository_owner_id = var.github_repository_owner_id
+  ci_allowed_refs            = var.ci_allowed_refs
 }

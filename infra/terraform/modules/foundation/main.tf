@@ -99,11 +99,13 @@ module "secrets" {
 module "ci_workload_identity" {
   source = "../workload-identity-federation"
 
-  project_id              = var.project_id
-  pool_id                 = var.wif_pool_id
-  github_repository       = var.github_repository
-  allowed_refs            = var.ci_allowed_refs
-  ci_service_account_name = module.service_accounts.names["ci-deployer"]
+  project_id                 = var.project_id
+  pool_id                    = var.wif_pool_id
+  github_repository          = var.github_repository
+  github_repository_id       = var.github_repository_id
+  github_repository_owner_id = var.github_repository_owner_id
+  allowed_refs               = var.ci_allowed_refs
+  ci_service_account_name    = module.service_accounts.names["ci-deployer"]
 
   depends_on = [module.project_services]
 }
