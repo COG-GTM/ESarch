@@ -56,6 +56,19 @@ for _ in $(seq 1 30); do
   if [ "$(curl -s -m 20 -X POST "$APP_URL/actuator/data-initializer")" = "true" ]; then initialised=true; break; fi
   sleep 5
 done
+# The query models are built asynchronously from the events the initializer published. The smoke collection reads
+# the order book of the first company and the portfolio of the first user; wait for those, or it races the projections.
+projections_ready() {
+  local company user
+  company=$(curl -sf -m 10 "$APP_URL/query/company" | jq -r '.[0].identifier // empty') && [ -n "$company" ] || return 1
+  [ "$(curl -sf -m 10 "$APP_URL/query/order-book/by-company/$company" | jq 'length')" -gt 0 ] 2>/dev/null || return 1
+  user=$(curl -sf -m 10 "$APP_URL/query/user" | jq -r '.[0].identifier // empty') && [ -n "$user" ] || return 1
+  curl -sf -m 10 -o /dev/null "$APP_URL/query/portfolio/by-user/$user"
+}
+if [ "$initialised" = true ]; then
+  for _ in $(seq 1 60); do projections_ready && break; sleep 2; done
+  projections_ready || echo "WARN: query projections not complete after 120s; the smoke collection may fail" >&2
+fi
 if [ "$initialised" = true ]; then echo "data-initializer: true"; record "Command routing (data-initializer)" pass
 else echo "FAIL: trader-app never answered true on /actuator/data-initializer" >&2; record "Command routing (data-initializer)" "**FAIL**"; fi
 
