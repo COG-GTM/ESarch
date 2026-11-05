@@ -7,7 +7,9 @@ self.addEventListener('activate', event => {
   event.waitUntil(
     caches
       .keys()
-      .then(keys => Promise.all(keys.filter(key => key.startsWith('sw-precache-')).map(key => caches.delete(key))))
+      // sw-precache names its caches 'sw-precache-<version>-<cacheId>-<scope>': only this scope's are removed.
+      .then(keys => keys.filter(key => key.startsWith('sw-precache-') && key.endsWith(`-${self.registration.scope}`)))
+      .then(keys => Promise.all(keys.map(key => caches.delete(key))))
       .then(() => self.registration.unregister())
       .then(() => self.clients.matchAll({ type: 'window' }))
       .then(clients => Promise.all(clients.map(client => client.navigate(client.url))))
