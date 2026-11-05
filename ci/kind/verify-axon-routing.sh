@@ -27,7 +27,7 @@ rm -f "$LOGS"/*.log "$LOGS"/*.txt
 k() { kubectl --context "kind-$CLUSTER" -n "$NS" "$@"; }
 PIDS=()
 cleanup() {
-  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && { kill "$p"; pkill -P "$p"; } 2>/dev/null || true; done
+  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && { pkill -P "$p"; kill "$p"; } 2>/dev/null || true; done
   if [ "${ESARCH_KIND_KEEP:-0}" != 1 ]; then kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true; fi
 }
 trap cleanup EXIT
