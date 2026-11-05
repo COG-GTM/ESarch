@@ -74,6 +74,11 @@ and no rebuild per environment. Migrations get cheaper when you read the code be
 Evidence: images build, the stack comes up locally, both backends report `UP`, the UI drives real API
 calls.
 
+When changing `docker/mysql/init/01-databases.sql`, run
+`docker compose down -v` before bringing the stack back up. MySQL init scripts
+run only for a new data volume; retaining the old volume can leave `enginedb`
+missing and make trading-engine fail to connect.
+
 ---
 
 ## 4. Phase 2 — Helm chart and GKE resources (5 min)

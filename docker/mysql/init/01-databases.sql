@@ -1,0 +1,4 @@
+CREATE DATABASE IF NOT EXISTS enginedb;
+GRANT ALL PRIVILEGES ON appdb.* TO 'trader'@'%';
+GRANT ALL PRIVILEGES ON enginedb.* TO 'trader'@'%';
+FLUSH PRIVILEGES;
