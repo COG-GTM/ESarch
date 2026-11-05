@@ -29,7 +29,6 @@ import org.springframework.stereotype.Service;
 
 import java.lang.invoke.MethodHandles;
 import java.util.List;
-import java.util.Optional;
 
 import static org.springframework.data.domain.Sort.Order.asc;
 
@@ -60,8 +59,8 @@ public class CompanyEventHandler {
     @QueryHandler
     public CompanyView find(CompanyByIdQuery query) {
         String companyId = query.getCompanyId().getIdentifier();
-        //noinspection ConstantConditions
-        return Optional.ofNullable(companyRepository.getOne(companyId))
+        // findById, not getOne: getOne returns an uninitialised proxy that fails to serialise once the session is closed.
+        return companyRepository.findById(companyId)
                        .orElseGet(() -> {
                            logger.warn("Tried to retrieve a Company query model with a non existent company id [{}]",
                                        companyId);
