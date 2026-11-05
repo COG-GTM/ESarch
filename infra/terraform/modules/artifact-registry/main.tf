@@ -37,7 +37,7 @@ resource "google_artifact_registry_repository_iam_member" "readers" {
 
   project    = var.project_id
   location   = google_artifact_registry_repository.docker.location
-  repository = google_artifact_registry_repository.docker.name
+  repository = google_artifact_registry_repository.docker.repository_id
   role       = "roles/artifactregistry.reader"
   member     = each.value
 }
@@ -47,7 +47,7 @@ resource "google_artifact_registry_repository_iam_member" "writers" {
 
   project    = var.project_id
   location   = google_artifact_registry_repository.docker.location
-  repository = google_artifact_registry_repository.docker.name
+  repository = google_artifact_registry_repository.docker.repository_id
   role       = "roles/artifactregistry.writer"
   member     = each.value
 }
