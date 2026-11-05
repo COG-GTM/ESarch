@@ -21,7 +21,7 @@ store and the read models). The procedure, the DMS alternative and the freeze si
 Per side (`SRC` = TAS, `TGT` = Cloud SQL) and per database, because on TAS each database is its own p.mysql service
 instance: `<SIDE>_<DB>_HOST|PORT|USER|PASSWORD|NAME|SSL_MODE`, falling back to `<SIDE>_HOST` etc. (`lib.sh`).
 `<SIDE>_<DB>_NAME` defaults to `enginedb` / `appdb`; p.mysql names the database `service_instance_db`.
-Passwords are read from the environment and passed to the clients only as `MYSQL_PWD`; never put them in a file in
+`<SIDE>_SSL_MODE` defaults to `REQUIRED`. Passwords are read from the environment and passed to the clients only as `MYSQL_PWD`; never put them in a file in
 the repo or on a command line. The client is the local `mysql` / `mysqldump` 8.0, or the same tools from an image
 with `MYSQL_CLIENT_IMAGE=mysql:8.0.46`.
 
@@ -30,8 +30,9 @@ with `MYSQL_CLIENT_IMAGE=mysql:8.0.46`.
 export SRC_ENGINEDB_HOST=... SRC_ENGINEDB_USER=... SRC_ENGINEDB_NAME=service_instance_db SRC_ENGINEDB_SSL_MODE=REQUIRED
 read -rs SRC_ENGINEDB_PASSWORD && export SRC_ENGINEDB_PASSWORD
 # same for SRC_APPDB_*
-# Cloud SQL: through the Auth Proxy on 127.0.0.1:3306 (or the private IP), the workload users from Secret Manager
-export TGT_HOST=127.0.0.1 TGT_SSL_MODE=PREFERRED TGT_ENGINEDB_USER=trading-engine TGT_APPDB_USER=trader-app
+# Cloud SQL: through the Auth Proxy on 127.0.0.1:3306, which encrypts the hop itself (to the private IP directly,
+# leave TGT_SSL_MODE at its default REQUIRED). The workload users from Secret Manager.
+export TGT_HOST=127.0.0.1 TGT_SSL_MODE=DISABLED TGT_ENGINEDB_USER=trading-engine TGT_APPDB_USER=trader-app
 export "TGT_ENGINEDB_PASSWORD=$(gcloud secrets versions access latest --secret=trading-engine-db-password)"
 export "TGT_APPDB_PASSWORD=$(gcloud secrets versions access latest --secret=trader-app-db-password)"
 

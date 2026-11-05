@@ -4,7 +4,9 @@
 # Connections are configured per side (SRC = TAS, TGT = Cloud SQL) and per logical database (ENGINEDB, APPDB),
 # because on TAS enginedb and appdb are two separate service instances with their own host and credentials:
 #   <SIDE>_<DB>_HOST, <SIDE>_<DB>_PORT, <SIDE>_<DB>_USER, <SIDE>_<DB>_PASSWORD, <SIDE>_<DB>_NAME, <SIDE>_<DB>_SSL_MODE
-# Each falls back to <SIDE>_HOST, <SIDE>_PORT (3306), <SIDE>_USER, <SIDE>_PASSWORD, <SIDE>_SSL_MODE (PREFERRED).
+# Each falls back to <SIDE>_HOST, <SIDE>_PORT (3306), <SIDE>_USER, <SIDE>_PASSWORD, <SIDE>_SSL_MODE (REQUIRED: the
+# copy carries credentials and trading data, so plaintext must be asked for explicitly, e.g. DISABLED towards a local
+# Cloud SQL Auth Proxy, which encrypts the hop to Cloud SQL itself).
 # <SIDE>_<DB>_NAME defaults to the logical name (enginedb / appdb); TAS p.mysql usually calls it service_instance_db.
 # Passwords only travel in MYSQL_PWD (environment), never on a command line.
 #
@@ -53,7 +55,7 @@ run_client() {
   local tool=$1 side=$2 db=$3; shift 3
   require_conn "$side" "$db"
   local args=(--host="$(conf "$side" "$db" HOST)" --port="$(conf "$side" "$db" PORT 3306)"
-              --user="$(conf "$side" "$db" USER)" --ssl-mode="$(conf "$side" "$db" SSL_MODE PREFERRED)"
+              --user="$(conf "$side" "$db" USER)" --ssl-mode="$(conf "$side" "$db" SSL_MODE REQUIRED)"
               --default-character-set=utf8mb4)
   if [ "$tool" = mysql ]; then args+=(--connect-timeout=10); fi
   if [ -n "${MYSQL_CLIENT_IMAGE:-}" ]; then
