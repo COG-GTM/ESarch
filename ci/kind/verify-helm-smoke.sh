@@ -65,19 +65,22 @@ appURL=http://localhost:$APP_PORT engineURL=http://localhost:$ENGINE_PORT proxyU
   bash ci/local/verify-local.sh
 
 echo "== 3. NetworkPolicies"
-# probe <name> <app label|-> <host> <port>: curl from a throwaway pod carrying that label. curl exit 28 (connect
-# timeout) means the policy dropped the SYN; any other result (HTTP status, or a protocol error from MySQL/AMQP)
-# means the TCP connection was accepted. Hosts are ClusterIPs so the result does not depend on DNS egress.
+# probe <name> <app label|-> <host> <port>: curl from a throwaway pod carrying that label. Blocked means curl timed
+# out (exit 28) without ever connecting (time_connect 0), i.e. the policy dropped the SYN; anything else (HTTP status,
+# a protocol error from MySQL/AMQP, or a response timeout after the connect) means the TCP connection was accepted.
+# Hosts are ClusterIPs so the result does not depend on DNS egress.
 ip() { k get svc "$1" -o jsonpath='{.spec.clusterIP}'; }
 probe() {
   local labels="esarch-probe=1"
   [ "$2" != - ] && labels="$labels,app.kubernetes.io/name=$2"
   k run "np-$1" --image=curlimages/curl:8.16.0 --image-pull-policy=IfNotPresent --restart=Never --labels="$labels" \
-    --command -- sh -c "curl -s -o /dev/null --connect-timeout 5 -m 8 http://$3:$4/; echo rc=\$?" >/dev/null
+    --command -- sh -c "t=\$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 -m 8 http://$3:$4/); echo rc=\$? connect=\$t" >/dev/null
   k wait --for=jsonpath='{.status.phase}'=Succeeded "pod/np-$1" --timeout=120s >/dev/null || true
-  local rc; rc=$(k logs "np-$1" | sed -n 's/^rc=//p')
+  local out rc connect
+  out=$(k logs "np-$1" | grep '^rc=' || true)
+  rc=$(sed -n 's/^rc=\([0-9]*\).*/\1/p' <<<"$out"); connect=$(sed -n 's/.*connect=//p' <<<"$out")
   k delete pod "np-$1" --wait=false >/dev/null
-  [ "$rc" = 28 ] && echo blocked || echo "open(rc=$rc)"
+  if [ "$rc" = 28 ] && [ "${connect:-0}" = 0.000000 ]; then echo blocked; else echo "open(rc=$rc)"; fi
 }
 status=0
 src() { if [ "$1" = - ]; then echo 'unlabelled pod'; else echo "$1 pod"; fi; }
