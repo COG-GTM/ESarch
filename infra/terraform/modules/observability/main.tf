@@ -109,7 +109,7 @@ locals {
                   legendTemplate = "5xx / all"
                   targetAxis     = "Y1"
                   timeSeriesQuery = {
-                    prometheusQuery = "sum(rate(http_server_requests_seconds_count{${local.app_selector},service=\"${svc}\",status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{${local.app_selector},service=\"${svc}\"}[5m]))"
+                    prometheusQuery = "(sum(rate(http_server_requests_seconds_count{${local.app_selector},service=\"${svc}\",status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_server_requests_seconds_count{${local.app_selector},service=\"${svc}\"}[5m]))"
                     unitOverride    = "10^2.%"
                   }
                 }]

@@ -27,7 +27,7 @@ run "dashboards_per_service" {
       for needle in [
         "http_server_requests_seconds_count",
         "http_server_requests_seconds_bucket",
-        "status=~\\\"5..\\\"",
+        "status=~\\\"5..\\\"}[5m])) or vector(0)) / sum(",
         "jvm_memory_used_bytes",
         "rabbitmq_queue_messages_ready{namespace=\\\"axon-trader\\\",queue=\\\"trades\\\"}",
         "cloudsql_googleapis_com:database_network_connections",

@@ -93,7 +93,7 @@
                 "plotType": "LINE",
                 "targetAxis": "Y1",
                 "timeSeriesQuery": {
-                  "prometheusQuery": "sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trading-engine\",status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trading-engine\"}[5m]))",
+                  "prometheusQuery": "(sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trading-engine\",status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trading-engine\"}[5m]))",
                   "unitOverride": "10^2.%"
                 }
               }
