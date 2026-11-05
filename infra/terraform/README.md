@@ -90,10 +90,12 @@ printf '%s\n' "${new_pw}" |
   kubectl -n axon-trader exec -i rabbitmq-server-0 -c rabbitmq -- sh -c 'read -r p; rabbitmqctl change_password axon-trader "$p"'
 kubectl -n axon-trader annotate externalsecret rabbitmq-default-user force-sync="$(date +%s)" --overwrite
 # Ready stays true from the previous sync; wait (up to 2m) until the synced Secret holds the new password.
-NEW_PW="${new_pw}" timeout 2m bash -c 'until [ "$(kubectl -n axon-trader get secret rabbitmq-default-user-external \
-    -o jsonpath="{.data.password}" | base64 -d)" = "${NEW_PW}" ]; do sleep 5; done' &&
-  kubectl -n axon-trader rollout restart statefulset/rabbitmq-server ||   # refreshes the in-pod rabbitmqadmin config
+if NEW_PW="${new_pw}" timeout 2m bash -c 'until [ "$(kubectl -n axon-trader get secret rabbitmq-default-user-external \
+    -o jsonpath="{.data.password}" | base64 -d)" = "${NEW_PW}" ]; do sleep 5; done'; then
+  kubectl -n axon-trader rollout restart statefulset/rabbitmq-server   # refreshes the in-pod rabbitmqadmin config
+else
   echo "Secret not refreshed: kubectl -n axon-trader describe externalsecret rabbitmq-default-user; restart once it syncs"
+fi
 unset new_pw
 ```
 
