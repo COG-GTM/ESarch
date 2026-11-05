@@ -28,3 +28,29 @@ spec:
     additionalConfig: |
       vm_memory_high_watermark.relative = 0.6
       disk_free_limit.absolute = 1GB
+  # Pod Security Standard `restricted` (namespace enforce label in platform/namespace.yaml): the operator's
+  # default pod runs as uid 999 but sets neither seccomp nor allowPrivilegeEscalation/capabilities.
+  override:
+    statefulSet:
+      spec:
+        template:
+          spec:
+            securityContext:
+              runAsNonRoot: true
+              runAsUser: 999
+              runAsGroup: 999
+              fsGroup: 999
+              seccompProfile:
+                type: RuntimeDefault
+            initContainers:
+              - name: setup-container
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]
+            containers:
+              - name: rabbitmq
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop: ["ALL"]

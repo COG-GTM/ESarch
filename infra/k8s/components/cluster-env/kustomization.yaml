@@ -36,6 +36,10 @@ replacements:
       - select: {kind: Gateway, name: axon-trader}
         fieldPaths:
           - "metadata.annotations.[networking.gke.io/certmap]"
+  - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.SSL_POLICY_NAME}
+    targets:
+      - select: {kind: GCPGatewayPolicy, name: axon-trader}
+        fieldPaths: [spec.default.sslPolicy]
   - source: {kind: ConfigMap, name: cluster-env, fieldPath: data.SMOKE_HOSTNAME}
     targets:
       - select: {kind: HTTPRoute, name: hello-world}

@@ -25,6 +25,20 @@ spec:
         namespaces:
           from: Same
 ---
+# TLS 1.2+ (MODERN profile) on the HTTPS listener: the SSL policy comes from Terraform (modules/gke-platform).
+apiVersion: networking.gke.io/v1
+kind: GCPGatewayPolicy
+metadata:
+  name: axon-trader
+spec:
+  default:
+    sslPolicy: SSL_POLICY_NAME
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: axon-trader
+---
+# The HTTP listener only redirects: nothing is served over plain HTTP.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

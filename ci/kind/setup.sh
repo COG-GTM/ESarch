@@ -1,4 +1,4 @@
-# Sourced by verify-axon-routing.sh, verify-helm-smoke.sh and verify-deploy-rollback.sh (expects CLUSTER, NS, k and fail from the caller).
+# Sourced by verify-axon-routing.sh, verify-helm-smoke.sh, verify-deploy-rollback.sh and verify-security-baseline.sh (expects CLUSTER, NS, k and fail from the caller).
 # kind_setup: kind cluster, local images, throwaway Secrets, the MySQL/RabbitMQ stand-ins (ci/kind/kustomization.yaml),
 # then `helm upgrade --install` of deploy/helm/axon-trader with ci/kind/values-kind.yaml. With ESARCH_KIND_GATEWAY=1
 # it also installs Envoy Gateway and renders the chart's Gateway + HTTPRoute (ci/kind/values-kind-gateway.yaml).
@@ -24,6 +24,9 @@ kind_cluster() {
     fi
   done
   kubectl --context "kind-$CLUSTER" create namespace "$NS" --dry-run=client -o yaml | kubectl --context "kind-$CLUSTER" apply -f - >/dev/null
+  # Same Pod Security Standard as infra/k8s/platform/namespace.yaml: anything not `restricted` is rejected at admission.
+  kubectl --context "kind-$CLUSTER" label namespace "$NS" --overwrite pod-security.kubernetes.io/enforce=restricted \
+    pod-security.kubernetes.io/enforce-version=v1.33 pod-security.kubernetes.io/warn=restricted >/dev/null
   local mysql_password rabbitmq_password app
   mysql_password=$(openssl rand -hex 16)
   rabbitmq_password=$(openssl rand -hex 16)
@@ -74,6 +77,28 @@ YAML
 }
 
 kind_setup() { kind_cluster; kind_install; }
+
+# kind_probe <name> <app label|-> <host> <port>: curl from a throwaway pod (restricted securityContext) carrying that
+# app label. Blocked means curl timed out (exit 28) without ever connecting (time_connect 0), i.e. a NetworkPolicy
+# dropped the SYN; anything else (HTTP status, a protocol error from MySQL/AMQP, or a response timeout after the
+# connect) means the TCP connection was accepted. Prints "blocked" or "open(rc=N)".
+kind_probe() {
+  local labels="esarch-probe=1"
+  [ "$2" != - ] && labels="$labels,app.kubernetes.io/name=$2"
+  k run "np-$1" --image=curlimages/curl:8.16.0 --image-pull-policy=IfNotPresent --restart=Never --labels="$labels" \
+    --dry-run=client -o json \
+    --command -- sh -c "t=\$(curl -s -o /dev/null -w '%{time_connect}' --connect-timeout 5 -m 8 http://$3:$4/); echo rc=\$? connect=\$t" |
+    jq '.spec.automountServiceAccountToken = false
+      | .spec.securityContext = {runAsNonRoot: true, runAsUser: 100, runAsGroup: 101, seccompProfile: {type: "RuntimeDefault"}}
+      | .spec.containers[0].securityContext = {allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: {drop: ["ALL"]}}' |
+    k apply -f - >/dev/null
+  k wait --for=jsonpath='{.status.phase}'=Succeeded "pod/np-$1" --timeout=120s >/dev/null || true
+  local out rc connect
+  out=$(k logs "np-$1" | grep '^rc=' || true)
+  rc=$(sed -n 's/^rc=\([0-9]*\).*/\1/p' <<<"$out"); connect=$(sed -n 's/.*connect=//p' <<<"$out")
+  k delete pod "np-$1" --wait=false >/dev/null
+  if [ "$rc" = 28 ] && [ "${connect:-0}" = 0.000000 ]; then echo blocked; else echo "open(rc=$rc)"; fi
+}
 
 # Eureka helpers (need EUREKA_URL, jq and fail()).
 registry() {

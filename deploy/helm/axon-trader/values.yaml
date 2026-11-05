@@ -30,6 +30,8 @@ route:
   apiPrefixes:
     - command
     - query
+  # Strict-Transport-Security on every routed response (the Gateway only serves the app over HTTPS); "" disables it.
+  hsts: "max-age=31536000; includeSubDomains"
 
 # Gateway. GKE environments use the platform Gateway (infra/k8s/platform/gateway.yaml) with the Certificate Manager
 # map holding the Google-managed certificate; set create: true to have the chart own an equivalent one instead.
@@ -41,6 +43,8 @@ gateway:
   certificateMap: ""
   # Terraform output gateway_address_name (reserved global address).
   addressName: ""
+  # With an HTTPS listener present, every HTTP listener gets a 301-to-HTTPS HTTPRoute and nothing else.
+  httpsRedirect: true
   listeners:
     - name: https
       protocol: HTTPS

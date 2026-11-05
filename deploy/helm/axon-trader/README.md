@@ -34,7 +34,9 @@ chart.
 `/` goes to `trader-ui`; `/api/command/*` and `/api/query/*` go to `trader-app` with `/api` stripped, the same
 contract as `docker/local-proxy`. Other `/api` paths fall through to nginx, which answers 404, so `/actuator` stays
 cluster-internal (CHG-12). `GCPBackendPolicy` gives `trader-app` a 3600 s backend timeout for the order-book SSE
-stream; `HealthCheckPolicy` points the load balancer at `/actuator/health` and `/healthz`.
+stream; `HealthCheckPolicy` points the load balancer at `/actuator/health` and `/healthz`. `route.hsts` sets
+`Strict-Transport-Security` on every routed response; with `gateway.create: true` the HTTP listener only redirects
+to HTTPS (`gateway.httpsRedirect`).
 
 ## NetworkPolicies (TAS NET-1, NET-2)
 
@@ -63,6 +65,9 @@ never matches. The engine Deployment uses `strategy: Recreate` so a rollout neve
   staging, prod and kind values (CI: `.github/workflows/helm.yml`).
 - `ci/kind/verify-helm-smoke.sh`: installs the chart on kind with MySQL/RabbitMQ stand-ins and Envoy Gateway, runs the
   Postman smoke collection and the UI/Gateway checks (`ci/local/verify-local.sh`), then probes the NetworkPolicies.
+- `ci/kind/verify-security-baseline.sh`: the s5.4 security baseline on kind (namespace `enforce=restricted`, blocked
+  NetworkPolicy curls, no credentials in values/manifests/images, actuator internal-only, HTTPS-only Gateway config);
+  findings in `docs/migration/security-baseline.md`.
 - `ci/kind/verify-axon-routing.sh`: Axon command routing over Eureka with two replicas per app, on the same chart.
 - `ci/kind/verify-deploy-rollback.sh`: the staging deploy logic (`ci/deploy/helm-deploy.sh`, run by
   `.github/workflows/deploy-staging.yml`) on kind: upgrade, rollout wait, newman smoke and e2e pass, then a crash-looping

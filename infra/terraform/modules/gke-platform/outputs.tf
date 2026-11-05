@@ -13,6 +13,11 @@ output "certificate_map_name" {
   value       = google_certificate_manager_certificate_map.gateway.name
 }
 
+output "ssl_policy_name" {
+  description = "SSL policy for the Gateway's GCPGatewayPolicy (spec.default.sslPolicy)."
+  value       = google_compute_ssl_policy.gateway.name
+}
+
 output "certificate_map_entries" {
   description = "Certificate map entry hostnames."
   value       = sort(keys(google_certificate_manager_certificate_map_entry.gateway))

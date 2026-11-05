@@ -43,6 +43,11 @@ run "gateway_certificate_and_smoke_secret" {
   }
 
   assert {
+    condition     = output.ssl_policy_name == "esarch-staging-gateway" && google_compute_ssl_policy.gateway.min_tls_version == "TLS_1_2" && google_compute_ssl_policy.gateway.profile == "MODERN"
+    error_message = "The Gateway SSL policy must require TLS 1.2+ with the MODERN profile."
+  }
+
+  assert {
     condition     = output.smoke_test_secret_id == "platform-smoke-test"
     error_message = "Smoke-test secret id unexpected."
   }

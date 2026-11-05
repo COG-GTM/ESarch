@@ -4,6 +4,9 @@ metadata:
   name: axon-trader
   labels:
     app.kubernetes.io/part-of: axon-trader
-    pod-security.kubernetes.io/enforce: baseline
+    # Every workload in the namespace (chart, RabbitMQ, smoke and check Jobs) runs non-root under `restricted`
+    # (s5.4, proven on kind by ci/kind/verify-security-baseline.sh).
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.33
     pod-security.kubernetes.io/warn: restricted
     pod-security.kubernetes.io/audit: restricted
