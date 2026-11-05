@@ -32,6 +32,11 @@ variable "hostnames" {
     condition     = length(var.hostnames) > 0 && alltrue([for h in var.hostnames : can(regex("^([a-z0-9]([a-z0-9-]*[a-z0-9])?\\.)+[a-z]{2,}$", h))])
     error_message = "hostnames must be a non-empty list of lowercase DNS names."
   }
+
+  validation {
+    condition     = length(distinct(var.hostnames)) == length(var.hostnames)
+    error_message = "hostnames must not repeat (each is one managed-certificate domain and one map entry)."
+  }
 }
 
 variable "smoke_test_secret_id" {
