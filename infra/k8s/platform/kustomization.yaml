@@ -1,0 +1,12 @@
+# Per-cluster platform objects for the axon-trader namespace. Cluster-specific values
+# (project, cluster, GSAs, Gateway address, certificate map) are filled in by the
+# cluster-env component from overlays/<env>/cluster.env.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: axon-trader
+resources:
+  - namespace.yaml
+  - serviceaccounts.yaml
+  - stores.yaml
+  - gateway.yaml
+  - networkpolicy.yaml

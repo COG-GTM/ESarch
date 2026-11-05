@@ -1,0 +1,4 @@
+# Rendered from `terraform output kustomize_env` by scripts/cluster-env.sh; holds the project id.
+overlays/*/cluster.env
+# Helm charts pulled by `kustomize build --enable-helm`.
+charts/

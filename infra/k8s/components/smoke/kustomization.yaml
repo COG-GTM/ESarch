@@ -1,0 +1,7 @@
+# Staging acceptance: a hello-world app served over HTTPS by the Gateway and an ExternalSecret
+# that resolves from Secret Manager. Drop this component once trader-app-ui routes land.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - hello-world.yaml
+  - smoke-test.yaml

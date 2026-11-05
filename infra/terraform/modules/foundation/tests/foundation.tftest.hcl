@@ -31,8 +31,8 @@ run "foundation_defaults" {
   command = apply
 
   assert {
-    condition     = length(module.project_services.services) == 12
-    error_message = "Expected the 12 foundation APIs to be enabled."
+    condition     = length(module.project_services.services) == 13
+    error_message = "Expected the 13 foundation APIs to be enabled."
   }
 
   assert {

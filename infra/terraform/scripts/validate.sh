@@ -14,8 +14,11 @@ for dir in bootstrap envs/* modules/*; do
   terraform -chdir="${dir}" validate -no-color
 done
 
-echo "==> terraform test modules/foundation (mocked google provider)"
-terraform -chdir=modules/foundation test -no-color
+for dir in modules/*/; do
+  [ -d "${dir}tests" ] || continue
+  echo "==> terraform test ${dir%/} (mocked google provider)"
+  terraform -chdir="${dir}" test -no-color
+done
 
 echo "==> tflint --recursive"
 tflint --init --config "$(pwd)/.tflint.hcl" >/dev/null

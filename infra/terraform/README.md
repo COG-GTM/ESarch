@@ -1,8 +1,9 @@
 # GCP foundation (Terraform)
 
 Foundation for running Axon Trader on GKE: project APIs, network, Artifact Registry, Secret Manager,
-service accounts and Workload Identity Federation for CI. The GKE cluster, Cloud SQL and RabbitMQ
-build on these outputs in later steps.
+service accounts and Workload Identity Federation for CI, plus the GKE Autopilot cluster and the
+GCP side of its add-ons. Cloud SQL and RabbitMQ build on these outputs in later steps. In-cluster
+add-ons (External Secrets Operator, Gateway, namespace) live in `infra/k8s/`.
 
 ```
 infra/terraform/
@@ -17,6 +18,10 @@ infra/terraform/
     managed-secrets/              Secret Manager secrets (no values) + per-secret accessor IAM
     service-accounts/             service accounts, project roles, optional GKE KSA -> GSA bindings
     workload-identity-federation/ GitHub Actions OIDC pool/provider + CI service account impersonation
+    gke/                          GKE Autopilot cluster: regional, private nodes, Dataplane V2, Workload
+                                  Identity, release channel REGULAR, Gateway API
+    gke-platform/                 Gateway global IP, Certificate Manager Google-managed cert + map,
+                                  Secret Manager smoke-test secret (read by the trader-app KSA)
   scripts/validate.sh             fmt, validate, mocked tests, tflint (what CI runs)
 ```
 
@@ -28,6 +33,9 @@ infra/terraform/
 | Cloud NAT | `esarch-<env>-nat` | egress for private nodes, errors logged |
 | Artifact Registry | `<region>-docker.pkg.dev/<project>/esarch-<env>` | prod: immutable tags, cleanup enforced |
 | Secrets | `trader-app-db-password`, `trading-engine-db-password`, `rabbitmq-password` | values added out of band |
+| GKE Autopilot | `esarch-<env>` | regional, private nodes, control plane `/28` from `gke_master_ipv4_cidr_block`, only `gke_master_authorized_networks` reach the endpoint, nodes run as `<env>-gke-nodes`, deletion protection on |
+| Gateway edge | `esarch-<env>-gateway` | global IP + certificate map; Google-managed cert for `gateway_hostnames` (load balancer authorization) |
+| Smoke-test secret | `platform-smoke-test` | constant non-sensitive value; `secretAccessor` for `<env>-trader-app` only |
 | WIF | pool `var.wif_pool_id`, provider `github-actions` | only tokens from `var.github_repository` whose numeric `github_repository_id`/`github_repository_owner_id` also match (and `var.ci_allowed_refs`), so a re-created repo with the same name is rejected |
 
 ## Service accounts and grants
@@ -72,5 +80,5 @@ The CI pipeline uses `google-github-actions/auth` with the `ci_workload_identity
 
 `scripts/validate.sh` needs only `terraform` (>= 1.7) and `tflint`, no GCP access. It runs
 `terraform fmt -check`, `terraform validate` on every root and module, `terraform test` on
-`modules/foundation` with a mocked google provider, and `tflint --recursive` with the terraform and
+every module with a `tests/` directory (`foundation`, `gke`, `gke-platform`) with a mocked google provider, and `tflint --recursive` with the terraform and
 google rulesets. `.github/workflows/terraform.yml` runs it on every change under `infra/terraform/`.

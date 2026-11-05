@@ -47,3 +47,38 @@ output "ci_service_account" {
   description = "service_account for google-github-actions/auth."
   value       = module.foundation.ci_service_account
 }
+
+output "gke_cluster_name" {
+  description = "GKE cluster name."
+  value       = module.gke.name
+}
+
+output "gke_cluster_location" {
+  description = "GKE cluster location."
+  value       = module.gke.location
+}
+
+output "gke_get_credentials" {
+  description = "Command that writes a kubeconfig entry for the cluster."
+  value       = "gcloud container clusters get-credentials ${module.gke.name} --region ${module.gke.location} --project ${var.project_id}"
+}
+
+output "gateway_address" {
+  description = "Gateway IP; create a DNS A record for each gateway hostname pointing here."
+  value       = module.gke_platform.gateway_address
+}
+
+output "kustomize_env" {
+  description = "Values for infra/k8s/overlays/<env>/cluster.env (written by infra/k8s/scripts/cluster-env.sh)."
+  value = {
+    PROJECT_ID           = var.project_id
+    CLUSTER_NAME         = module.gke.name
+    CLUSTER_LOCATION     = module.gke.location
+    TRADER_APP_GSA       = module.foundation.service_account_emails["trader-app"]
+    TRADING_ENGINE_GSA   = module.foundation.service_account_emails["trading-engine"]
+    GATEWAY_ADDRESS_NAME = module.gke_platform.gateway_address_name
+    CERT_MAP_NAME        = module.gke_platform.certificate_map_name
+    SMOKE_HOSTNAME       = var.gateway_hostnames[0]
+    SMOKE_SECRET_ID      = module.gke_platform.smoke_test_secret_id
+  }
+}

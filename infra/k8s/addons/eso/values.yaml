@@ -1,0 +1,32 @@
+installCRDs: true
+replicaCount: 2
+
+# Only namespaced SecretStores are used: each store authenticates as its workload's KSA
+# (Workload Identity -> the workload's Google service account), so ESO itself holds no GCP role.
+processClusterStore: false
+processClusterExternalSecret: false
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+
+webhook:
+  replicaCount: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+
+certController:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi

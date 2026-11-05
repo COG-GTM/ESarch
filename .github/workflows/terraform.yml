@@ -4,11 +4,13 @@ on:
   pull_request:
     paths:
       - "infra/terraform/**"
+      - "infra/k8s/**"
       - ".github/workflows/terraform.yml"
   push:
     branches: [master]
     paths:
       - "infra/terraform/**"
+      - "infra/k8s/**"
       - ".github/workflows/terraform.yml"
 
 permissions:
@@ -30,3 +32,18 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: infra/terraform/scripts/validate.sh
+
+  k8s-manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize, helm, kubeconform
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -sSfL https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv5.4.3/kustomize_v5.4.3_linux_amd64.tar.gz | tar xz -C "$HOME/bin"
+          curl -sSfL https://get.helm.sh/helm-v3.16.4-linux-amd64.tar.gz | tar xz --strip-components=1 -C "$HOME/bin" linux-amd64/helm
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz | tar xz -C "$HOME/bin" kubeconform
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+      - name: kustomize build + kubeconform
+        run: infra/k8s/scripts/validate.sh
