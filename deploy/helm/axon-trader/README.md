@@ -64,3 +64,6 @@ never matches. The engine Deployment uses `strategy: Recreate` so a rollout neve
 - `ci/kind/verify-helm-smoke.sh`: installs the chart on kind with MySQL/RabbitMQ stand-ins and Envoy Gateway, runs the
   Postman smoke collection and the UI/Gateway checks (`ci/local/verify-local.sh`), then probes the NetworkPolicies.
 - `ci/kind/verify-axon-routing.sh`: Axon command routing over Eureka with two replicas per app, on the same chart.
+- `ci/kind/verify-deploy-rollback.sh`: the staging deploy logic (`ci/deploy/helm-deploy.sh`, run by
+  `.github/workflows/deploy-staging.yml`) on kind: upgrade, rollout wait, newman smoke and e2e pass, then a crash-looping
+  `trader-app` image and a `trader-ui` image failing e2e are each rolled back automatically.
