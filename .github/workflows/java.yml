@@ -54,3 +54,24 @@ jobs:
       - name: Stop compose
         if: always()
         run: docker compose down -v
+
+  migrate-data:
+    # s6.1 rehearsal: MySQL 5.7 source seeded through the buy/sell API, copied into the Flyway-baselined MySQL 8.0
+    # target with tools/migrate-data, verify.sh matching, apps healthy on the copy and trading on it.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "8"
+          cache: maven
+      - name: Build jars
+        run: ./mvnw -B -DskipTests package
+      - name: shellcheck
+        run: shellcheck -x tools/migrate-data/*.sh tools/migrate-data/rehearsal/target-initdb/*.sh
+      - name: rehearse.sh
+        run: SEED_ROUNDS=100 tools/migrate-data/rehearse.sh
+      - name: App logs
+        if: always()
+        run: tail -n 200 target/migrate-data/rehearsal/*.log || true
