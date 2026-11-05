@@ -198,20 +198,28 @@ Prerequisites: JDK 8, Docker with Compose v2, Node.js (20 is known to work) with
 # 2. Backing services: MySQL 5.7 (:3306), RabbitMQ 3.7 (:5672, UI on :15672), Eureka discovery-server image (:8761)
 docker compose up -d --wait
 
-# 3. Backend apps (trading-engine on :8081, trader-app on :8080), either as images in Compose...
-docker compose --profile apps up -d --wait
+# 3. Backend apps (trading-engine on :8081, trader-app on :8080), either as images in Compose, which also starts
+#    the UI image and the reverse proxy from 4a (http://localhost:8088)...
+docker compose --profile apps up -d --build --wait
 #    ...or as jars, each in its own terminal
 SPRING_PROFILES_ACTIVE=local java -jar trading-engine/target/trading-engine.jar
 SPRING_PROFILES_ACTIVE=local java -jar trader-app/target/trader-app.jar
 
-# 4. UI on :3000, calling trader-app on :8080 (the default when served from localhost)
+# 4a. UI image (nginx) behind a local reverse proxy that stands in for the GKE Ingress: http://localhost:8088
+#     serves the UI at / and trader-app at /api (only /api/command/ and /api/query/ are routed).
+#     Already running with the `apps` profile; with the jars, start it on its own:
+docker compose --profile ui up -d --build --wait
+# 4b. Or the dev server on :3000, calling trader-app directly (the bundle defaults to same-origin /api)
 (cd trader-app-ui && REACT_APP_API_ROOT=http://localhost:8080 npm start)
 
-# 5. Smoke test: newman collection, ci/tasks/e2e-test-both-sides.sh, then a matched buy/sell checked in the portfolio view
-ci/local/verify-local.sh
+# 5. Smoke test: newman collection, ci/tasks/e2e-test-both-sides.sh, then a matched buy/sell checked in the portfolio view.
+#    With 4a, proxyURL sends the UI checks and the orders through the proxy and adds deep-link and routing checks.
+proxyURL=http://localhost:8088 ci/local/verify-local.sh   # or just ci/local/verify-local.sh with 4b
 ```
 
 Jib builds `esarch/trading-engine`, `esarch/trader-app` and `esarch/discovery-server` (no Dockerfile, no local JDK in the image): Eclipse Temurin 8 JRE base pinned by digest, user `1000:1000`, `JAVA_TOOL_OPTIONS=-XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError` instead of the buildpack memory calculator, and two tags, the 12-character git SHA and `latest`. Override with `-Dimage.registry=...` / `-Dimage.tag=...`; `jib:build` pushes instead of loading into Docker. Compose runs `latest` unless `ESARCH_IMAGE_TAG` (and `ESARCH_IMAGE_REGISTRY`) say otherwise.
+
+The UI calls the API same-origin under `/api` by default. To point an image at another API root without rebuilding, mount a replacement for `/usr/share/nginx/html/config.js` containing `window.AXON_TRADER_CONFIG = { apiRoot: 'http://localhost:8080' };` (see `trader-app-ui/public/config.js`). `REACT_APP_API_ROOT` still works at build time. `ci/local/smoke-ui-image.sh` checks the image and the proxy against a stub API, without the Java services. The proxy uses host networking to reach the backends on `127.0.0.1` (Linux; on Docker Desktop enable host networking first).
 
 The backends bind to `127.0.0.1` only (the local profile has no auth in front of the trading API; set `ESARCH_BIND_ADDRESS` to change it). `ci/local/verify-local.sh` exits non-zero if newman, the e2e script or the portfolio check fails. It waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
 
