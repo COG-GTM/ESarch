@@ -80,11 +80,12 @@ spec:
                 [ "${i}" -lt 60 ] || { echo "mysql: unreachable"; exit 1; }
                 sleep 5
               done
-              # Persistent write on a kept check table; only this pod's row is touched.
+              # Persistent write on a kept table owned by this check; rows left by an interrupted run are cleared first.
               mysql --connect-timeout=10 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${MYSQL_DATABASE}" -e "
                 SELECT CURRENT_USER() AS user, DATABASE() AS db, VERSION() AS version;
                 CREATE TABLE IF NOT EXISTS backing_services_check (
                   probe VARCHAR(253) PRIMARY KEY, checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+                DELETE FROM backing_services_check;
                 INSERT INTO backing_services_check (probe) VALUES ('${HOSTNAME}');
                 SELECT COUNT(*) AS rows_written FROM backing_services_check WHERE probe = '${HOSTNAME}';
                 DELETE FROM backing_services_check WHERE probe = '${HOSTNAME}';"

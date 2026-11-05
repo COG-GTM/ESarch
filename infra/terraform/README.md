@@ -81,12 +81,14 @@ Cloud SQL and as Secret Manager versions, so they also sit in the remote state: 
 bucket restricted to the platform team. To rotate one, `terraform apply -replace='module.backing_services.random_password.this["db-trading-engine"]'`
 (keys: `db-trader-app`, `db-trading-engine`, `cloudsql-root`, `rabbitmq-app`) and restart the
 consumers. RabbitMQ keeps its users on the persistent volume and reads `default_user.conf` only on
-first boot, so after `rabbitmq-app` is replaced, push the new password to the broker before restarting anything:
+first boot, so after `rabbitmq-app` is replaced, push the new password to the broker before restarting anything.
+Read it from Secret Manager, not from the synced Secret, which ESO refreshes asynchronously:
 
 ```bash
-kubectl -n axon-trader annotate externalsecret rabbitmq-default-user force-sync="$(date +%s)" --overwrite
-kubectl -n axon-trader get secret rabbitmq-default-user-external -o jsonpath='{.data.password}' | base64 -d |
+gcloud secrets versions access latest --secret=rabbitmq-password --project=<project> |
   kubectl -n axon-trader exec -i rabbitmq-server-0 -c rabbitmq -- sh -c 'read -r p; rabbitmqctl change_password axon-trader "$p"'
+kubectl -n axon-trader annotate externalsecret rabbitmq-default-user force-sync="$(date +%s)" --overwrite
+kubectl -n axon-trader wait --for=condition=Ready externalsecret/rabbitmq-default-user --timeout=2m
 kubectl -n axon-trader rollout restart statefulset/rabbitmq-server   # refreshes the in-pod rabbitmqadmin config
 ```
 
