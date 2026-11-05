@@ -2,8 +2,9 @@
 # Compares the TAS source (SRC_*) with the Cloud SQL target (TGT_*) for enginedb and appdb, read-only on both sides.
 # Checks per database:
 #   tables     same set of base tables (the target's flyway_schema_history and SKIP_TABLES excluded)
+#   columns    same column names and types in every table
 #   rows       row count of every table
-#   checksum   order-independent checksum of every row of every table (all columns; text compared as utf8mb4,
+#   checksum   order-independent checksum of every row of every table that counts duplicate rows (all columns; text compared as utf8mb4,
 #              so a latin1 source and a utf8mb4 target compare equal when the characters are the same)
 #   event store, on domain_event_entry / snapshot_event_entry: max(global_index), number of aggregates and a digest
 #              of every aggregate's max(sequence_number)
@@ -37,10 +38,16 @@ row_expr() {
   printf "md5(concat_ws('|', %s))" "$exprs"
 }
 
-# XOR of both 64-bit halves of each row's md5, so the result does not depend on row order or collation. BIT_XOR
-# is 0 on no rows; no COALESCE around it, which turns the unsigned result into a DECIMAL/DOUBLE and loses bits.
-xor_md5() { # inner select producing column h
-  printf "select concat(count(*), ' ', lpad(hex(bit_xor(cast(conv(substr(h, 1, 16), 16, 10) as unsigned))), 16, '0'), lpad(hex(bit_xor(cast(conv(substr(h, 17, 16), 16, 10) as unsigned))), 16, '0')) from (%s) x" "$1"
+# Order-independent digest of the row hashes that keeps multiplicity (duplicate rows count, unlike XOR): the exact
+# DECIMAL sums of both 64-bit halves of each row's md5. No float anywhere: CAST(... AS UNSIGNED) is exact and SUM of an
+# unsigned BIGINT is a DECIMAL.
+digest() { # inner select producing column h -> "count sum1 sum2"
+  printf "select concat(count(*), ' ', ifnull(sum(cast(conv(substr(h, 1, 16), 16, 10) as unsigned)), 0), ' ', ifnull(sum(cast(conv(substr(h, 17, 16), 16, 10) as unsigned)), 0)) from (%s) x" "$1"
+}
+
+columns() { # SIDE DB TABLE -> "column data_type" byte-sorted, one per line
+  q "$1" "$2" "select concat(column_name, ' ', data_type) from information_schema.columns
+                 where table_schema = database() and table_name = '$3'" | LC_ALL=C sort
 }
 
 both() { # db sql -> sets SRC_OUT / TGT_OUT
@@ -57,9 +64,11 @@ for db in "${dbs[@]}"; do
 
   for t in $src_tables; do
     has_table TGT "$db" "$t" || { report "$db" "$t: present" yes no; continue; }
+    src_cols=$(columns SRC "$db" "$t"); tgt_cols=$(columns TGT "$db" "$t")
+    report "$db" "$t: columns" "$(wc -l <<<"$src_cols") $(md5sum <<<"$src_cols" | cut -c1-8)" "$(wc -l <<<"$tgt_cols") $(md5sum <<<"$tgt_cols" | cut -c1-8)"
     both "$db" "select count(*) from \`$t\`"
     report "$db" "$t: rows" "$SRC_OUT" "$TGT_OUT"
-    sql=$(xor_md5 "select $(row_expr SRC "$db" "$t") h from \`$t\`")
+    sql=$(digest "select $(row_expr SRC "$db" "$t") h from \`$t\`")
     both "$db" "$sql"
     report "$db" "$t: checksum" "${SRC_OUT#* }" "${TGT_OUT#* }"
   done
@@ -70,7 +79,7 @@ for db in "${dbs[@]}"; do
       both "$db" "select coalesce(max(global_index), 0) from domain_event_entry"
       report "$db" "$t: max(global_index)" "$SRC_OUT" "$TGT_OUT"
     fi
-    sql=$(xor_md5 "select md5(concat(hex(convert(aggregate_identifier using utf8mb4)), ':', max(sequence_number))) h from \`$t\` group by aggregate_identifier")
+    sql=$(digest "select md5(concat(hex(convert(aggregate_identifier using utf8mb4)), ':', max(sequence_number))) h from \`$t\` group by aggregate_identifier")
     both "$db" "$sql"
     report "$db" "$t: aggregates" "${SRC_OUT%% *}" "${TGT_OUT%% *}"
     report "$db" "$t: per-aggregate max(sequence_number)" "${SRC_OUT#* }" "${TGT_OUT#* }"
