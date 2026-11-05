@@ -118,15 +118,19 @@ jobs:
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           OUTCOME: ${{ steps.deploy.outcome }}
+          RESULT: ${{ steps.deploy.outputs.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           if [ -z "$SLACK_WEBHOOK_URL" ]; then
             echo "::notice::Slack notification skipped: set the repository secret SLACK_WEBHOOK_URL."
             exit 0
           fi
-          if [ "$OUTCOME" = success ]; then
-            text=":white_check_mark: Staging deploy of \`${IMAGE_TAG:0:7}\` _passed_ (helm upgrade, smoke, e2e): <$RUN_URL|run>"
-          else
-            text="<!here> *FAILED* :x: Staging deploy of \`${IMAGE_TAG:0:7}\` ($OUTCOME), helm rolled back: <$RUN_URL|run>"
-          fi
+          case "$OUTCOME/$RESULT" in
+            success/*) text=":white_check_mark: Staging deploy of \`${IMAGE_TAG:0:7}\` _passed_ (helm upgrade, smoke, e2e): <$RUN_URL|run>" ;;
+            */rolled-back-to-*) state="helm rolled back to revision ${RESULT#rolled-back-to-}" ;;
+            */rollback-failed) state="helm rollback FAILED, staging needs a look" ;;
+            */no-rollback) state="no earlier revision to roll back to" ;;
+            *) state="failed before the helm upgrade, staging unchanged" ;;
+          esac
+          [ "$OUTCOME" = success ] || text="<!here> *FAILED* :x: Staging deploy of \`${IMAGE_TAG:0:7}\` ($state): <$RUN_URL|run>"
           jq -n --arg text "$text" '{text: $text}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL" >/dev/null
