@@ -7,7 +7,8 @@
 #      by both engine replicas, with each aggregate always handled by the same pod (consistent hashing);
 #   3. kill (SIGKILL, no deregistration) the trading-engine pod that handled the most commands, wait for Eureka to evict
 #      it, place more orders and check they are all handled exactly once by the survivor, including aggregates that the
-#      killed pod owned; then wait for the replacement pod to join the ring and check again.
+#      killed pod owned (orders sent before the eviction must be handled once if HTTP 200, not at all otherwise);
+#      then wait for the replacement pod to join the ring and check again.
 # Build the images first: mvn -B -DskipTests package jib:dockerBuild (esarch/<app>:latest). Needs docker, kind,
 # kubectl and jq. ESARCH_KIND_KEEP=1 keeps the cluster afterwards. Never touches GCP or TAS.
 set -euo pipefail
@@ -26,7 +27,7 @@ rm -f "$LOGS"/*.log "$LOGS"/*.txt
 k() { kubectl --context "kind-$CLUSTER" -n "$NS" "$@"; }
 PIDS=()
 cleanup() {
-  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && kill "$p" 2>/dev/null || true; done
+  for p in "${PIDS[@]:-}"; do [ -n "$p" ] && { kill "$p"; pkill -P "$p"; } 2>/dev/null || true; done
   if [ "${ESARCH_KIND_KEEP:-0}" != 1 ]; then kind delete cluster --name "$CLUSTER" >/dev/null 2>&1 || true; fi
 }
 trap cleanup EXIT
@@ -57,21 +58,29 @@ for app in trader-app trading-engine; do
 done
 
 echo "== 2. Deploy discovery-server, MySQL, RabbitMQ, then 2x trading-engine and 2x trader-app (profile kubernetes)"
-# Backing services and Eureka first, so the apps start against reachable dependencies.
+# Backing services and Eureka first, so the apps start against reachable dependencies. `notin` also selects objects
+# without the label, so the generated ConfigMaps (mysql-initdb, *-config) are created in this first pass too.
 k apply -k ci/kind -l 'app.kubernetes.io/name notin (trader-app,trading-engine)'
+k get configmap mysql-initdb trader-app-config trading-engine-config >/dev/null || fail "generated ConfigMaps missing after the first apply"
 for d in mysql rabbitmq discovery-server; do k rollout status "deploy/$d" --timeout=600s; done
 k apply -k ci/kind
 for d in trading-engine trader-app; do k rollout status "deploy/$d" --timeout=600s; done
 k get pods -o wide
 
-k port-forward svc/discovery-server "$EUREKA_PORT:8761" >"$LOGS/pf-eureka.log" 2>&1 & PIDS+=($!)
-k port-forward svc/trader-app "$APP_PORT:8080" >"$LOGS/pf-app.log" 2>&1 & PIDS+=($!)
+# kubectl port-forward pins one pod and exits when that pod's container restarts, so keep re-establishing it.
+forward() { while :; do k port-forward "svc/$1" "$2" || true; sleep 1; done; }
+forward discovery-server "$EUREKA_PORT:8761" >"$LOGS/pf-eureka.log" 2>&1 & PIDS+=($!)
+forward trader-app "$APP_PORT:8080" >"$LOGS/pf-app.log" 2>&1 & PIDS+=($!)
 sleep 3
 
 registry() {
   curl -sf -H 'Accept: application/json' "$EUREKA_URL/eureka/apps" | jq -r '
     .applications.application[] | .name as $n | .instance[] |
     "\($n) \(.instanceId) ip=\(.ipAddr):\(.port."$") status=\(.status) axon.loadFactor=\(.metadata.loadFactor // "-") axon.commandFilter=\(if .metadata.serializedCommandFilter then "yes" else "-" end)"' | sort
+}
+lease_ts() {
+  curl -sf -H 'Accept: application/json' "$EUREKA_URL/eureka/apps" |
+    jq -r --arg ip "$1" '.applications.application[].instance[] | select(.ipAddr == $ip) | .leaseInfo.registrationTimestamp'
 }
 engine_pods() { k get pods -l app.kubernetes.io/name=trading-engine --field-selector=status.phase=Running -o jsonpath='{range .items[*]}{.metadata.name}={.status.podIP}{"\n"}{end}'; }
 # Both apps publish their capabilities through Eureka metadata (Axon SpringCloudCommandRouter).
@@ -145,11 +154,12 @@ check_at_most_once() {
     lines=$(cat "$LOGS"/trading-engine-*.log | grep -c "Handling command Start${type}TransactionCommand(transactionId=$tx," || true)
     events=$(mysql_q "select count(*) from domain_event_entry where aggregate_identifier='$tx' and payload_type like '%TransactionStartedEvent'")
     echo "$tx $type $user http=$code log_lines=$lines started_events=$events" >>"$LOGS/handled-$phase.txt"
-    [ "$lines" -le 1 ] && [ "$events" -le 1 ] || fail "[$phase] $tx handled more than once"
+    # HTTP 200 <=> handled once (one log line, one event); any other status <=> not handled at all (no log, no event).
     if [ "$code" = 200 ]; then
-      [ "$events" = 1 ] || fail "[$phase] $tx got HTTP 200 but was not handled"
+      [ "$lines" = 1 ] && [ "$events" = 1 ] || fail "[$phase] $tx got HTTP 200 but log_lines=$lines started_events=$events"
       ok=$((ok + 1))
     else
+      [ "$lines" = 0 ] && [ "$events" = 0 ] || fail "[$phase] $tx got HTTP $code but log_lines=$lines started_events=$events"
       failed=$((failed + 1))
     fi
   done <"$LOGS/orders.txt"
@@ -208,25 +218,43 @@ awk -v v="$victim" '$2 == v {print $1}' "$LOGS/owners-before.txt" >"$LOGS/victim
 echo "victim=$victim ($victim_ip) owned $(wc -l <"$LOGS/victim-aggregates.txt") aggregates; survivor=$survivor"
 # SIGKILL the JVM from the node, as a crash or OOM kill would: no shutdown hook runs, so it never deregisters from
 # Eureka and the lease has to expire. (`kubectl delete --force` still sends SIGTERM, which deregisters cleanly.)
+# The kubelet would restart the container in place and the new JVM could re-register under the same instance id
+# before the old lease expires, so scale to 1 at the same time and let the ReplicaSet delete the victim (lowest
+# pod-deletion-cost); the replacement comes back in step 7.
+victim_lease=$(lease_ts "$victim_ip")
+k annotate pod "$victim" controller.kubernetes.io/pod-deletion-cost=-1000 --overwrite >/dev/null
 cid=$(k get pod "$victim" -o jsonpath='{.status.containerStatuses[0].containerID}' | sed 's|^containerd://||')
 host_pid=$(docker exec "$CLUSTER-control-plane" crictl inspect --output go-template --template '{{.info.pid}}' "$cid")
 t0=$(date +%s)
 docker exec "$CLUSTER-control-plane" kill -9 "$host_pid"
 echo "kill -9 $host_pid (java in $victim)"
+# Watch Eureka from the moment of the kill: orders routed to the dead pod can block for the TCP connect timeout.
+(
+  while sleep 1; do
+    apps=$(curl -sf -H 'Accept: application/json' "$EUREKA_URL/eureka/apps") || continue
+    ts=$(jq -r --arg ip "$victim_ip" '.applications.application[].instance[] | select(.ipAddr == $ip) | .leaseInfo.registrationTimestamp' <<<"$apps")
+    if [ -z "$ts" ]; then echo "evicted $(date +%s)" >"$LOGS/eviction.txt"; break; fi
+    if [ "$ts" != "$victim_lease" ]; then echo "re-registered $ts" >"$LOGS/eviction.txt"; break; fi
+  done
+) & PIDS+=($!)
+k scale deploy/trading-engine --replicas=1
+sleep 2
+[ -z "$(k get pod "$survivor" -o jsonpath='{.metadata.deletionTimestamp}')" ] || fail "scale-down picked $survivor"
 
 echo "== 5a. Orders while Eureka still lists the dead pod: at most once, and HTTP 200 only if handled"
 place_orders during-eviction 2
 check_at_most_once during-eviction
 
-for _ in $(seq 1 90); do
-  registry | grep -q "ip=$victim_ip:" || break
-  sleep 1
-done
-registry | grep -q "ip=$victim_ip:" && fail "Eureka never evicted $victim"
-echo "Eureka evicted $victim after $(( $(date +%s) - t0 )) s; registry now:"; registry
+for _ in $(seq 1 180); do [ -s "$LOGS/eviction.txt" ] && break; sleep 1; done
+read -r outcome at <"$LOGS/eviction.txt" 2>/dev/null || fail "Eureka never evicted $victim"
+[ "$outcome" = evicted ] || fail "$victim re-registered (lease $victim_lease -> $at) instead of expiring"
+evicted_after=$((at - t0))
+echo "Eureka evicted $victim after $evicted_after s (lease expiry, not a deregistration); registry now:"; registry
+# A graceful deregistration would remove it within a couple of seconds; lease expiry takes >= 15 s.
+[ "$evicted_after" -ge 10 ] || fail "$victim left Eureka after $evicted_after s: deregistered, not a crash"
 sleep 6  # one registry fetch + Axon membership update on the trader-app and trading-engine side
 
-echo "== 6. Orders with one trading-engine replica left (killed container still restarting)"
+echo "== 6. Orders with one trading-engine replica left (deployment scaled to 1)"
 place_orders after-kill 10
 check after-kill "$survivor"
 grep -h "Handling command [A-Za-z]*(\(portfolioId\|orderBookId\)=" "$LOGS/$survivor.log" | sed 's/.*(\(portfolioId\|orderBookId\)=\([0-9a-f-]*\).*/\2/' | sort -u >"$LOGS/survivor-aggregates.txt"
@@ -234,10 +262,10 @@ moved=$(comm -12 <(sort "$LOGS/victim-aggregates.txt") "$LOGS/survivor-aggregate
 echo "aggregates owned by $victim before the kill and handled by $survivor after it: $moved"
 [ "$moved" -gt 0 ] || fail "no aggregate failed over from $victim to $survivor"
 
-echo "== 7. Restarted $victim rejoins the ring"
+echo "== 7. Scale back to 2: a replacement pod joins the ring"
+k scale deploy/trading-engine --replicas=2
+k rollout status deploy/trading-engine --timeout=600s
 wait_registry 4
-k wait --for=condition=Ready "pod/$victim" --timeout=600s
-echo "$victim restarts: $(k get pod "$victim" -o jsonpath='{.status.containerStatuses[0].restartCount}')"
 registry
 read -r -a ENGINES <<<"$(engine_pods | cut -d= -f1 | tr '\n' ' ')"
 sleep 6
@@ -245,8 +273,11 @@ place_orders rejoined 10
 check rejoined "${ENGINES[@]}"
 
 echo "== 8. Whole event store: duplicates and totals"
-echo "duplicate (aggregate, sequence) pairs: $(mysql_q 'select count(*) from (select 1 from domain_event_entry group by aggregate_identifier, sequence_number having count(*) > 1) d')"
-echo "TransactionStarted events per transaction > 1: $(mysql_q "select count(*) from (select aggregate_identifier from domain_event_entry where payload_type like '%TransactionStartedEvent' group by aggregate_identifier having count(*) > 1) d")"
+dup_seq=$(mysql_q 'select count(*) from (select 1 from domain_event_entry group by aggregate_identifier, sequence_number having count(*) > 1) d')
+dup_started=$(mysql_q "select count(*) from (select aggregate_identifier from domain_event_entry where payload_type like '%TransactionStartedEvent' group by aggregate_identifier having count(*) > 1) d")
+echo "duplicate (aggregate, sequence) pairs: $dup_seq"
+echo "TransactionStarted events per transaction > 1: $dup_started"
+[ "$dup_seq" = 0 ] && [ "$dup_started" = 0 ] || fail "duplicate events in the event store"
 mysql_q "select substring_index(payload_type, '.', -1), count(*) from domain_event_entry group by payload_type order by 1" | column -t
 echo "orders posted: $(wc -l <"$LOGS/orders.txt"), HTTP 200: $(awk '$5 == 200' "$LOGS/orders.txt" | wc -l)"
 echo "PASS: two replicas of each service, every buy/sell handled exactly once, routing survived killing $victim"
