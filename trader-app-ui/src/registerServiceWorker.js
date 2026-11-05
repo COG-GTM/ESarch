@@ -108,10 +108,13 @@ function checkValidServiceWorker(swUrl) {
     });
 }
 
+// getRegistrations() rather than serviceWorker.ready: ready never resolves for a registration that has no
+// active worker (e.g. one stuck installing), so that worker would never be removed.
 export function unregister() {
   if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.ready.then(registration => {
-      registration.unregister();
-    });
+    return navigator.serviceWorker
+      .getRegistrations()
+      .then(registrations => Promise.all(registrations.map(registration => registration.unregister())));
   }
+  return Promise.resolve();
 }
