@@ -2,6 +2,8 @@
 # Config Server served from ESarch-conf (trader-app/trader-app-cloud.yml); the static values of that file are vendored in
 # trader-app/src/main/resources/application-kubernetes.properties and any of them can be overridden here (relaxed binding).
 # DB_HOST, DB_USER and RABBITMQ_HOST are placeholders the Helm chart (s3.5) fills per environment.
+# The JDBC URL requires TLS and verifies the server certificate: mount the Cloud SQL server CA as a truststore and add
+# trustCertificateKeyStoreUrl/-Password, or, with the Cloud SQL Auth Proxy sidecar (s2.3), point at 127.0.0.1 instead.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -11,7 +13,7 @@ metadata:
     app.kubernetes.io/part-of: axon-trader
 data:
   SPRING_PROFILES_ACTIVE: kubernetes
-  SPRING_DATASOURCE_URL: jdbc:mysql://DB_HOST:3306/appdb?useSSL=false
+  SPRING_DATASOURCE_URL: jdbc:mysql://DB_HOST:3306/appdb?useSSL=true&requireSSL=true&verifyServerCertificate=true
   SPRING_DATASOURCE_USERNAME: DB_USER
   SPRING_RABBITMQ_HOST: RABBITMQ_HOST
   SPRING_RABBITMQ_PORT: "5672"
