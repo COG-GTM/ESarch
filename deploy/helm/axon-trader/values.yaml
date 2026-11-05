@@ -1,0 +1,87 @@
+# Defaults are production-shaped; values-staging.yaml / values-prod.yaml fill the per-environment settings and
+# ci/kind/values-kind.yaml swaps GCP for in-cluster stand-ins. Each service subchart documents its own keys in
+# charts/<service>/values.yaml; override them here under the service name.
+global:
+  image:
+    # Artifact Registry path, e.g. us-central1-docker.pkg.dev/PROJECT/axon-trader (CI publishes esarch/<service>).
+    registry: ""
+    # Git SHA tag published by .github/workflows/ci.yml. Empty means the chart appVersion.
+    tag: ""
+
+discovery-server:
+  enabled: true
+trading-engine:
+  enabled: true
+trader-app:
+  enabled: true
+trader-ui:
+  enabled: true
+
+# HTTPRoute replacing the TAS routes: / -> trader-ui, /api/command/* and /api/query/* -> trader-app with /api
+# stripped (the same contract as docker/local-proxy). Other /api paths get no route, so actuator and the
+# data-initializer are not reachable from outside.
+route:
+  enabled: true
+  hostnames: []
+  parentRefs:
+    - name: axon-trader
+      sectionName: https
+  # Server-sent events on /query/* need long-lived connections (GCPBackendPolicy timeout below).
+  apiPrefixes:
+    - command
+    - query
+
+# Gateway. GKE environments use the platform Gateway (infra/k8s/platform/gateway.yaml) with the Certificate Manager
+# map holding the Google-managed certificate; set create: true to have the chart own an equivalent one instead.
+gateway:
+  create: false
+  name: axon-trader
+  className: gke-l7-global-external-managed
+  # Terraform output certificate_map_name: Google-managed certificate via Certificate Manager.
+  certificateMap: ""
+  # Terraform output gateway_address_name (reserved global address).
+  addressName: ""
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+    - name: http
+      protocol: HTTP
+      port: 80
+
+# GKE Gateway extras: health checks on the real probe paths (the LB defaults to GET / on the serving port) and a
+# long backend timeout for SSE.
+gke:
+  enabled: true
+  backendTimeoutSec: 3600
+
+networkPolicy:
+  enabled: true
+  # The platform kustomization owns the namespace default-deny-ingress; enable for clusters without it (kind).
+  defaultDenyIngress: false
+  # Where the Gateway's traffic comes from. GKE L7 LBs reach pods (NEGs) from the Google front-end and health-check
+  # ranges; Envoy Gateway on kind from its proxy pods.
+  gatewayPeers:
+    - ipBlock: {cidr: 35.191.0.0/16}
+    - ipBlock: {cidr: 130.211.0.0/22}
+  # Egress allow-list for trader-app and trading-engine (each other on 8080 and Eureka on 8761 are always allowed).
+  dns:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: kube-system
+      podSelector:
+        matchLabels:
+          k8s-app: kube-dns
+  mysql:
+    port: 3307
+    # Cloud SQL private IP range (Auth Proxy -> instance on 3307). kind: the MySQL stand-in pod on 3306.
+    peers: []
+  rabbitmq:
+    port: 5672
+    peers:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: rabbitmq
+  # Anything else the apps must reach, e.g. the GKE metadata server for Workload Identity and Google APIs for the
+  # Auth Proxy's IAM token exchange.
+  extraEgress: []

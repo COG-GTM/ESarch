@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # s3.3 acceptance check for the Eureka replacement of the TAS Service Registry, on a local kind cluster:
-#   1. deploy discovery-server (deploy/kubernetes/discovery-server) plus two replicas of trader-app and trading-engine
-#      with SPRING_PROFILES_ACTIVE=kubernetes (ci/kind/), and show each pod's Axon capabilities in the Eureka registry;
+#   1. install the deploy/helm/axon-trader chart (discovery-server, two replicas of trader-app and trading-engine with
+#      SPRING_PROFILES_ACTIVE=kubernetes, NetworkPolicies on) against the ci/kind MySQL/RabbitMQ stand-ins, and show
+#      each pod's Axon capabilities in the Eureka registry;
 #   2. place buy/sell orders through the trader-app Service and check every command is handled exactly once (one
 #      "Handling command" log line across the trading-engine pods, one *TransactionStartedEvent in the event store),
 #      by both engine replicas, with each aggregate always handled by the same pod (consistent hashing);
@@ -9,8 +10,8 @@
 #      it, place more orders and check they are all handled exactly once by the survivor, including aggregates that the
 #      killed pod owned (orders sent before the eviction must be handled once if HTTP 200, not at all otherwise);
 #      then wait for the replacement pod to join the ring and check again.
-# Build the images first: mvn -B -DskipTests package jib:dockerBuild (esarch/<app>:latest). Needs docker, kind,
-# kubectl and jq. ESARCH_KIND_KEEP=1 keeps the cluster afterwards. Never touches GCP or TAS.
+# Build the images first: mvn -B -DskipTests package jib:dockerBuild (esarch/<app>:latest) and
+# docker build -t esarch/trader-ui:latest trader-app-ui. Needs docker, kind, kubectl, helm and jq. ESARCH_KIND_KEEP=1 keeps the cluster afterwards. Never touches GCP or TAS.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 
@@ -21,7 +22,7 @@ APP_PORT=${ESARCH_APP_PORT:-18080}
 EUREKA_PORT=${ESARCH_EUREKA_PORT:-18761}
 APP_URL=http://localhost:$APP_PORT
 EUREKA_URL=http://localhost:$EUREKA_PORT
-IMAGES="esarch/discovery-server:latest esarch/trader-app:latest esarch/trading-engine:latest mysql:5.7 rabbitmq:3.7-management"
+IMAGES="esarch/discovery-server:latest esarch/trader-app:latest esarch/trading-engine:latest esarch/trader-ui:latest mysql:5.7 rabbitmq:3.7-management"
 mkdir -p "$LOGS"
 rm -f "$LOGS"/*.log "$LOGS"/*.txt
 k() { kubectl --context "kind-$CLUSTER" -n "$NS" "$@"; }
@@ -58,14 +59,11 @@ for app in trader-app trading-engine; do
 done
 
 echo "== 2. Deploy discovery-server, MySQL, RabbitMQ, then 2x trading-engine and 2x trader-app (profile kubernetes)"
-# Backing services and Eureka first, so the apps start against reachable dependencies. `notin` also selects objects
-# without the label, so the generated ConfigMaps (mysql-initdb, *-config) are created in this first pass too.
-k apply -k ci/kind -l 'app.kubernetes.io/name notin (trader-app,trading-engine)'
-k get configmap mysql-initdb trader-app-config trading-engine-config >/dev/null || fail "generated ConfigMaps missing after the first apply"
-for d in mysql rabbitmq discovery-server; do k rollout status "deploy/$d" --timeout=600s; done
-k apply -k ci/kind
-for d in trading-engine trader-app; do k rollout status "deploy/$d" --timeout=600s; done
-k get pods -o wide
+# MySQL/RabbitMQ stand-ins, then the axon-trader chart (ci/kind/setup.sh). The chart runs one trading-engine (sagas,
+# see charts/trading-engine/values.yaml); this check is about routing between two.
+# shellcheck source=ci/kind/setup.sh
+. ci/kind/setup.sh
+ESARCH_HELM_ARGS="--set trading-engine.replicaCount=2 ${ESARCH_HELM_ARGS:-}" kind_install
 
 # kubectl port-forward pins one pod and exits when that pod's container restarts, so keep re-establishing it.
 forward() { while :; do k port-forward "svc/$1" "$2" || true; sleep 1; done; }
@@ -73,26 +71,11 @@ forward discovery-server "$EUREKA_PORT:8761" >"$LOGS/pf-eureka.log" 2>&1 & PIDS+
 forward trader-app "$APP_PORT:8080" >"$LOGS/pf-app.log" 2>&1 & PIDS+=($!)
 sleep 3
 
-registry() {
-  curl -sf -H 'Accept: application/json' "$EUREKA_URL/eureka/apps" | jq -r '
-    .applications.application[] | .name as $n | .instance[] |
-    "\($n) \(.instanceId) ip=\(.ipAddr):\(.port."$") status=\(.status) axon.loadFactor=\(.metadata.loadFactor // "-") axon.commandFilter=\(if .metadata.serializedCommandFilter then "yes" else "-" end)"' | sort
-}
 lease_ts() {
   curl -sf -H 'Accept: application/json' "$EUREKA_URL/eureka/apps" |
     jq -r --arg ip "$1" '.applications.application[].instance[] | select(.ipAddr == $ip) | .leaseInfo.registrationTimestamp'
 }
 engine_pods() { k get pods -l app.kubernetes.io/name=trading-engine --field-selector=status.phase=Running -o jsonpath='{range .items[*]}{.metadata.name}={.status.podIP}{"\n"}{end}'; }
-# Both apps publish their capabilities through Eureka metadata (Axon SpringCloudCommandRouter).
-wait_registry() {
-  local want=$1
-  for _ in $(seq 1 60); do
-    n=$(registry | grep -c 'axon.commandFilter=yes' || true)
-    [ "$n" = "$want" ] && return 0
-    sleep 2
-  done
-  registry; fail "expected $want instances with Axon metadata in Eureka, got $n"
-}
 wait_registry 4
 echo "Eureka registry:"; registry
 

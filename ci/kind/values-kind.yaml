@@ -1,0 +1,42 @@
+# kind stand-in values for deploy/helm/axon-trader (ci/kind/setup.sh): the images built locally, MySQL 5.7 and
+# RabbitMQ 3.7 pods (ci/kind/backing-services.yaml) instead of Cloud SQL and the RabbitMQ operator, and Secrets
+# created by the script with random passwords instead of ExternalSecrets. No GCP: no Auth Proxy, no Workload
+# Identity, no GKE Gateway policies. NetworkPolicies stay on, with the namespace default-deny the platform would add.
+global:
+  image:
+    tag: latest
+
+trading-engine: &axonApp
+  cloudSqlProxy:
+    enabled: false
+  database:
+    host: mysql
+    username: trader
+    # MySQL 5.7 generates a self-signed certificate: TLS on, no CA to verify against.
+    params: useSSL=true&requireSSL=true&enabledTLSProtocols=TLSv1.2&verifyServerCertificate=false
+  secret:
+    externalSecret:
+      enabled: false
+  # A laptop starts two JVMs per app at once; give Flyway and Axon more time than on GKE.
+  probes:
+    startup:
+      httpGet: {path: /actuator/health, port: http}
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 72
+
+trader-app: *axonApp
+
+route:
+  enabled: false
+gke:
+  enabled: false
+
+networkPolicy:
+  defaultDenyIngress: true
+  mysql:
+    port: 3306
+    peers:
+      - podSelector:
+          matchLabels:
+            app.kubernetes.io/name: mysql

@@ -1,0 +1,138 @@
+global:
+  image:
+    registry: ""
+    tag: ""
+
+image:
+  registry: ""
+  repository: esarch/trader-app
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Ignored when autoscaling.enabled (the HPA owns the replica count). Axon's DistributedCommandBus needs every replica
+# registered in Eureka; keep at least two so a pod loss only re-hashes the ring.
+replicaCount: 2
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+containerPort: 8080
+service:
+  port: 8080
+# Leaves Eureka and finishes in-flight commands before SIGKILL.
+terminationGracePeriodSeconds: 45
+
+springProfile: kubernetes
+# SPRING_DATASOURCE_URL / _USERNAME. Default: Cloud SQL through the Auth Proxy sidecar on 127.0.0.1 (the proxy does the
+# TLS + IAM-authorised connection; JDBC TLS on loopback would add nothing).
+database:
+  enabled: true
+  host: 127.0.0.1
+  port: 3306
+  name: appdb
+  username: trader-app
+  params: useSSL=false&allowPublicKeyRetrieval=true
+# Cloud SQL Auth Proxy v2 native sidecar, authenticated by the pod's Workload Identity (roles/cloudsql.client).
+cloudSqlProxy:
+  enabled: true
+  image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.27.0
+  instanceConnectionName: CLOUDSQL_INSTANCE_CONNECTION_NAME
+  extraArgs:
+    - --private-ip
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {memory: 128Mi}
+rabbitmq:
+  enabled: true
+  host: rabbitmq
+  port: 5672
+  username: axon-trader
+  virtualHost: /
+eureka:
+  enabled: true
+  defaultZone: http://discovery-server:8761/eureka/
+# Extra non-secret keys for the ConfigMap (override any of the above).
+config: {}
+env: []
+
+# SPRING_DATASOURCE_PASSWORD and SPRING_RABBITMQ_PASSWORD. With externalSecret.enabled the chart renders the
+# ExternalSecret; otherwise a Secret named secret.name (default <service>-secrets) must already exist.
+secret:
+  enabled: true
+  name: ""
+  externalSecret:
+    enabled: true
+    secretStore: gcp-sm-trader-app
+    refreshInterval: 1h
+    data:
+      SPRING_DATASOURCE_PASSWORD: trader-app-db-password
+      SPRING_RABBITMQ_PASSWORD: rabbitmq-password
+
+serviceAccount:
+  create: true
+  name: ""
+  # GSA email for Workload Identity (Terraform foundation module output). Needed by the Auth Proxy and the SecretStore.
+  gcpServiceAccount: ""
+  automountToken: false
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 768Mi
+  limits:
+    memory: 1Gi
+
+# Spring Boot actuator health (DB, RabbitMQ and Eureka included). The startup probe covers JVM start, Flyway and
+# Axon token-store set-up (up to 3 minutes) so readiness and liveness can stay tight afterwards.
+probes:
+  startup:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 36
+  readiness:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 10
+    timeoutSeconds: 3
+    failureThreshold: 3
+  liveness:
+    httpGet: {path: /actuator/health, port: http}
+    periodSeconds: 20
+    timeoutSeconds: 5
+    failureThreshold: 6
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# CPU-based. The command bus re-hashes over Eureka as replicas join and leave, so scaling is safe; the
+# scale-down window keeps the ring from flapping.
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 70
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []

@@ -1,0 +1,27 @@
+apiVersion: v2
+name: axon-trader
+description: "Axon Trader on GKE (umbrella chart) - trading-engine, trader-app, discovery-server and trader-ui, plus the HTTPRoute and the NetworkPolicies that replace the TAS routes and cf add-network-policy rules."
+type: application
+version: 0.1.0
+appVersion: "latest"
+# The subcharts live unpacked under charts/, so no `helm dependency build` is needed.
+dependencies:
+  - name: axon-common
+    version: 0.1.0
+    repository: file://charts/axon-common
+  - name: discovery-server
+    version: 0.1.0
+    repository: file://charts/discovery-server
+    condition: discovery-server.enabled
+  - name: trading-engine
+    version: 0.1.0
+    repository: file://charts/trading-engine
+    condition: trading-engine.enabled
+  - name: trader-app
+    version: 0.1.0
+    repository: file://charts/trader-app
+    condition: trader-app.enabled
+  - name: trader-ui
+    version: 0.1.0
+    repository: file://charts/trader-ui
+    condition: trader-ui.enabled

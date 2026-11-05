@@ -1,0 +1,37 @@
+{{- if and .Values.route.enabled .Values.gke.enabled }}
+{{- range $svc, $path := dict "trader-app" "/actuator/health" "trader-ui" "/healthz" }}
+---
+# The GKE load balancer health-checks the NEG endpoints; point it at the probe path instead of GET /.
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: {{ $svc }}
+  labels:
+    {{- include "axon-trader.labels" $ | nindent 4 }}
+spec:
+  default:
+    config:
+      type: HTTP
+      httpHealthCheck:
+        port: 8080
+        requestPath: {{ $path }}
+  targetRef:
+    group: ""
+    kind: Service
+    name: {{ $svc }}
+{{- end }}
+---
+apiVersion: networking.gke.io/v1
+kind: GCPBackendPolicy
+metadata:
+  name: trader-app
+  labels:
+    {{- include "axon-trader.labels" . | nindent 4 }}
+spec:
+  default:
+    timeoutSec: {{ .Values.gke.backendTimeoutSec }}
+  targetRef:
+    group: ""
+    kind: Service
+    name: trader-app
+{{- end }}
