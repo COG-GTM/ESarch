@@ -85,10 +85,13 @@ first boot, so after `rabbitmq-app` is replaced, push the new password to the br
 Read it from Secret Manager, not from the synced Secret, which ESO refreshes asynchronously:
 
 ```bash
-gcloud secrets versions access latest --secret=rabbitmq-password --project=<project> |
+new_pw="$(gcloud secrets versions access latest --secret=rabbitmq-password --project=<project>)"
+printf '%s\n' "${new_pw}" |
   kubectl -n axon-trader exec -i rabbitmq-server-0 -c rabbitmq -- sh -c 'read -r p; rabbitmqctl change_password axon-trader "$p"'
 kubectl -n axon-trader annotate externalsecret rabbitmq-default-user force-sync="$(date +%s)" --overwrite
-kubectl -n axon-trader wait --for=condition=Ready externalsecret/rabbitmq-default-user --timeout=2m
+# Ready stays true from the previous sync; wait until the synced Secret actually holds the new password.
+until [ "$(kubectl -n axon-trader get secret rabbitmq-default-user-external -o jsonpath='{.data.password}' | base64 -d)" = "${new_pw}" ]; do sleep 5; done
+unset new_pw
 kubectl -n axon-trader rollout restart statefulset/rabbitmq-server   # refreshes the in-pod rabbitmqadmin config
 ```
 
