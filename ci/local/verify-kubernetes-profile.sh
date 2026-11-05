@@ -98,8 +98,10 @@ snapshot() {
     echo "portfolio[$u]=$(curl -sf "$APP_URL/query/portfolio/by-user/$uid" | jq -c --arg ob "$order_book_id" '{amountOfMoney, reservedAmountOfMoney, inPossession: (.itemsInPossession[$ob].amount // 0), reserved: (.itemsReserved[$ob].amount // 0)}')"
     echo "transactions[$u]=$(curl -sf "$APP_URL/query/transaction/by-portfolio/$pid" | jq -c '[.[] | {type, amountOfItems, amountOfExecutedItems, pricePerItem, state}] | sort_by(.type, .pricePerItem)')"
   done
-  echo "enginedb.domain_event_entry=$(mysql_q enginedb 'select count(*) from domain_event_entry')"
-  echo "appdb.domain_event_entry=$(mysql_q appdb 'select count(*) from domain_event_entry')"
+  # Count plus a digest over every event row (identity, position and payload), so a changed or replaced event fails too.
+  local digest="set session group_concat_max_len = 16777216; select concat(count(*), ' md5=', md5(group_concat(concat_ws(':', global_index, event_identifier, aggregate_identifier, sequence_number, type, payload_type, time_stamp, md5(payload), md5(meta_data)) order by global_index separator ','))) from domain_event_entry"
+  echo "enginedb.domain_event_entry=$(mysql_q enginedb "$digest")"
+  echo "appdb.domain_event_entry=$(mysql_q appdb "$digest")"
   echo "appdb.portfolio_view=$(mysql_q appdb 'select count(*) from portfolio_view')"
   echo "appdb.order_view=$(mysql_q appdb 'select count(*) from order_view')"
 }
