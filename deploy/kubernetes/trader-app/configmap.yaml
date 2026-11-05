@@ -1,0 +1,20 @@
+# Non-secret settings for trader-app (SPRING_PROFILES_ACTIVE=kubernetes), consumed with envFrom. Replaces what the TAS
+# Config Server served from ESarch-conf (trader-app/trader-app-cloud.yml); the static values of that file are vendored in
+# trader-app/src/main/resources/application-kubernetes.properties and any of them can be overridden here (relaxed binding).
+# DB_HOST, DB_USER and RABBITMQ_HOST are placeholders the Helm chart (s3.5) fills per environment.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: trader-app-config
+  labels:
+    app.kubernetes.io/name: trader-app
+    app.kubernetes.io/part-of: axon-trader
+data:
+  SPRING_PROFILES_ACTIVE: kubernetes
+  SPRING_DATASOURCE_URL: jdbc:mysql://DB_HOST:3306/appdb?useSSL=false
+  SPRING_DATASOURCE_USERNAME: DB_USER
+  SPRING_RABBITMQ_HOST: RABBITMQ_HOST
+  SPRING_RABBITMQ_PORT: "5672"
+  SPRING_RABBITMQ_USERNAME: axon-trader
+  SPRING_RABBITMQ_VIRTUAL_HOST: /
+  EUREKA_DEFAULT_ZONE: http://discovery-server:8761/eureka/
