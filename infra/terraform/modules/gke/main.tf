@@ -28,6 +28,15 @@ resource "google_container_cluster" "this" {
     workload_pool = "${var.project_id}.svc.id.goog"
   }
 
+  # Google Managed Service for Prometheus (managed collection): scrapes the PodMonitoring
+  # resources in infra/k8s/platform/monitoring.yaml. Autopilot sends system and workload logs
+  # to Cloud Logging without further configuration.
+  monitoring_config {
+    managed_prometheus {
+      enabled = true
+    }
+  }
+
   gateway_api_config {
     channel = "CHANNEL_STANDARD"
   }

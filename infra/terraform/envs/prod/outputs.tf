@@ -82,3 +82,13 @@ output "kustomize_env" {
     SMOKE_SECRET_ID      = module.gke_platform.smoke_test_secret_id
   }
 }
+
+output "dashboard_ids" {
+  description = "Cloud Monitoring dashboard ids, by service."
+  value       = module.observability.dashboard_ids
+}
+
+output "alert_policy_names" {
+  description = "Alert policy resource names (pod_restarts, http_5xx, queue_backlog)."
+  value       = module.observability.alert_policy_names
+}

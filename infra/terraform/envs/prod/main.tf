@@ -62,3 +62,18 @@ module "gke_platform" {
 
   depends_on = [module.foundation]
 }
+
+module "observability" {
+  source = "../../modules/observability"
+
+  project_id   = var.project_id
+  environment  = local.environment
+  cluster_name = module.gke.name
+  namespace    = var.kubernetes_namespace
+
+  cloudsql_instance_names     = var.cloudsql_instance_names
+  notification_channel_emails = var.alert_notification_emails
+  labels                      = var.labels
+
+  depends_on = [module.foundation]
+}

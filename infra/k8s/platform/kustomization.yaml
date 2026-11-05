@@ -10,3 +10,4 @@ resources:
   - stores.yaml
   - gateway.yaml
   - networkpolicy.yaml
+  - monitoring.yaml

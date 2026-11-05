@@ -58,6 +58,11 @@ run "autopilot_cluster_settings" {
   }
 
   assert {
+    condition     = google_container_cluster.this.monitoring_config[0].managed_prometheus[0].enabled == true
+    error_message = "Managed Service for Prometheus (managed collection) must be enabled."
+  }
+
+  assert {
     condition     = google_container_cluster.this.gateway_api_config[0].channel == "CHANNEL_STANDARD"
     error_message = "Gateway API must be enabled."
   }

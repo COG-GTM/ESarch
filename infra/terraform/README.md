@@ -22,7 +22,10 @@ infra/terraform/
                                   Identity, release channel REGULAR, Gateway API
     gke-platform/                 Gateway global IP, Certificate Manager Google-managed cert + map,
                                   Secret Manager smoke-test secret (read by the trader-app KSA)
+    observability/                Cloud Monitoring dashboard per service, alert policies (pod restarts,
+                                  5xx rate, RabbitMQ backlog), ERROR log-based metric, email channels
   scripts/validate.sh             fmt, validate, mocked tests, tflint (what CI runs)
+  scripts/export-dashboards.sh    renders dashboards to docs/observability/dashboards/ (checked by test)
 ```
 
 ## What gets created per environment
@@ -80,5 +83,5 @@ The CI pipeline uses `google-github-actions/auth` with the `ci_workload_identity
 
 `scripts/validate.sh` needs only `terraform` (>= 1.7) and `tflint`, no GCP access. It runs
 `terraform fmt -check`, `terraform validate` on every root and module, `terraform test` on
-every module with a `tests/` directory (`foundation`, `gke`, `gke-platform`) with a mocked google provider, and `tflint --recursive` with the terraform and
+every module with a `tests/` directory (`foundation`, `gke`, `gke-platform`, `observability`) with a mocked google provider, and `tflint --recursive` with the terraform and
 google rulesets. `.github/workflows/terraform.yml` runs it on every change under `infra/terraform/`.

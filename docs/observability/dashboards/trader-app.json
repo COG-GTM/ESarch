@@ -1,0 +1,330 @@
+{
+  "displayName": "Axon Trader staging / trader-app",
+  "mosaicLayout": {
+    "columns": 48,
+    "tiles": [
+      {
+        "height": 16,
+        "widget": {
+          "title": "Request rate (req/s) by status",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "{{status}}",
+                "plotType": "STACKED_AREA",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (status) (rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m]))",
+                  "unitOverride": "1/s"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "req/s",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 0,
+        "yPos": 0
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Latency (p50 / p95 / p99, mean)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "p50",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "histogram_quantile(0.5, sum by (le) (rate(http_server_requests_seconds_bucket{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m])))",
+                  "unitOverride": "s"
+                }
+              },
+              {
+                "legendTemplate": "p95",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m])))",
+                  "unitOverride": "s"
+                }
+              },
+              {
+                "legendTemplate": "p99",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m])))",
+                  "unitOverride": "s"
+                }
+              },
+              {
+                "legendTemplate": "mean",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(rate(http_server_requests_seconds_sum{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m])) / sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m]))",
+                  "unitOverride": "s"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "seconds",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 0
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Errors: 5xx ratio",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "5xx / all",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\",status=~\"5..\"}[5m])) / sum(rate(http_server_requests_seconds_count{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"}[5m]))",
+                  "unitOverride": "10^2.%"
+                }
+              }
+            ],
+            "thresholds": [
+              {
+                "color": "RED",
+                "direction": "ABOVE",
+                "label": "alert",
+                "targetAxis": "Y1",
+                "value": 0.05
+              }
+            ],
+            "yAxis": {
+              "label": "ratio",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 0,
+        "yPos": 16
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "JVM heap (used / committed / max) by pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "{{pod}} used",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pod) (jvm_memory_used_bytes{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\",area=\"heap\"})",
+                  "unitOverride": "By"
+                }
+              },
+              {
+                "legendTemplate": "{{pod}} committed",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pod) (jvm_memory_committed_bytes{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\",area=\"heap\"})",
+                  "unitOverride": "By"
+                }
+              },
+              {
+                "legendTemplate": "{{pod}} max",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pod) (jvm_memory_max_bytes{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\",area=\"heap\"})",
+                  "unitOverride": "By"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "bytes",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 16
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "RabbitMQ queue depth (trades)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "ready",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(rabbitmq_queue_messages_ready{namespace=\"axon-trader\",queue=\"trades\"})",
+                  "unitOverride": "1"
+                }
+              },
+              {
+                "legendTemplate": "unacked",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(rabbitmq_queue_messages_unacked{namespace=\"axon-trader\",queue=\"trades\"})",
+                  "unitOverride": "1"
+                }
+              }
+            ],
+            "thresholds": [
+              {
+                "color": "RED",
+                "direction": "ABOVE",
+                "label": "backlog alert",
+                "targetAxis": "Y1",
+                "value": 1000
+              }
+            ],
+            "yAxis": {
+              "label": "messages",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 0,
+        "yPos": 32
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Cloud SQL connections (server) and Hikari pool (trader-app)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "Cloud SQL {{database_id}}",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (database_id) (cloudsql_googleapis_com:database_network_connections{monitored_resource=\"cloudsql_database\",database_id=~\"axon-trader-staging-placeholder:(.*)\"})",
+                  "unitOverride": "1"
+                }
+              },
+              {
+                "legendTemplate": "pool active",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(hikaricp_connections_active{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"})",
+                  "unitOverride": "1"
+                }
+              },
+              {
+                "legendTemplate": "pool idle",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(hikaricp_connections_idle{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"})",
+                  "unitOverride": "1"
+                }
+              },
+              {
+                "legendTemplate": "pool pending",
+                "plotType": "LINE",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum(hikaricp_connections_pending{cluster=\"esarch-staging\",namespace=\"axon-trader\",service=\"trader-app\"})",
+                  "unitOverride": "1"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "connections",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 32
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "Container restarts (15 min) by pod",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "{{pod_name}}",
+                "plotType": "STACKED_BAR",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pod_name) (increase(kubernetes_io:container_restart_count{monitored_resource=\"k8s_container\",cluster_name=\"esarch-staging\",namespace_name=\"axon-trader\",container_name=\"trader-app\"}[15m]))",
+                  "unitOverride": "1"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "restarts",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 0,
+        "yPos": 48
+      },
+      {
+        "height": 16,
+        "widget": {
+          "title": "ERROR log entries (per min)",
+          "xyChart": {
+            "dataSets": [
+              {
+                "legendTemplate": "{{pod_name}}",
+                "plotType": "STACKED_BAR",
+                "targetAxis": "Y1",
+                "timeSeriesQuery": {
+                  "prometheusQuery": "sum by (pod_name) (rate(logging_googleapis_com:user_esarch_staging_app_error_logs{monitored_resource=\"k8s_container\",cluster_name=\"esarch-staging\",namespace_name=\"axon-trader\",container_name=\"trader-app\"}[5m])) * 60",
+                  "unitOverride": "1/min"
+                }
+              }
+            ],
+            "yAxis": {
+              "label": "entries/min",
+              "scale": "LINEAR"
+            }
+          }
+        },
+        "width": 24,
+        "xPos": 24,
+        "yPos": 48
+      },
+      {
+        "height": 20,
+        "widget": {
+          "logsPanel": {
+            "filter": "resource.type=\"k8s_container\" AND resource.labels.cluster_name=\"esarch-staging\" AND resource.labels.namespace_name=\"axon-trader\" AND resource.labels.container_name=\"trader-app\"",
+            "resourceNames": [
+              "projects/axon-trader-staging-placeholder"
+            ]
+          },
+          "title": "Logs (Cloud Logging, replaces cf logs / Loggregator)"
+        },
+        "width": 48,
+        "xPos": 0,
+        "yPos": 64
+      }
+    ]
+  }
+}
