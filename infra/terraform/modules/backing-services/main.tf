@@ -95,8 +95,8 @@ resource "google_sql_database" "this" {
   deletion_policy = "ABANDON"
 }
 
-# One BUILT_IN user per workload. Users created through the Cloud SQL API get Cloud SQL's
-# default privileges; narrowing each one to its own database is a live check (README).
+# One BUILT_IN user per workload. API-created users get cloudsqlsuperuser (every database); the
+# Cloud SQL API cannot grant per database, so infra/k8s/scripts/cloudsql-grants.sh narrows them (README).
 resource "google_sql_user" "this" {
   for_each = var.databases
 

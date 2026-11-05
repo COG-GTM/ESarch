@@ -22,6 +22,7 @@ overlays/staging, prod      platform + rabbitmq (+ smoke and backing-services-ch
 local/kind/                 kind stand-in for staging: rabbitmq + debug Job, MySQL 8.0 stand-in for Cloud SQL
 scripts/validate.sh         offline: kustomize build + kubeconform (what CI runs)
 scripts/kind-check.sh       local: kind cluster, ESO + cert-manager + operator, local/kind, waits for the debug Job
+scripts/cloudsql-grants.sh  confines each Cloud SQL user to its own database (one-shot mysql pod)
 scripts/cluster-env.sh      writes overlays/<env>/cluster.env from `terraform output kustomize_env`
 ```
 
@@ -70,7 +71,7 @@ kubectl -n axon-trader get externalsecret rabbitmq-default-user backing-services
 kubectl -n axon-trader get rabbitmqcluster rabbitmq                # ALLREPLICASREADY True
 kubectl -n axon-trader get pvc                                     # persistence-rabbitmq-server-0 Bound
 kubectl -n axon-trader wait --for=condition=complete job/backing-services-check --timeout=5m
-kubectl -n axon-trader logs job/backing-services-check -c mysql    # CURRENT_USER trading-engine@%, "mysql: OK"
+kubectl -n axon-trader logs job/backing-services-check -c mysql    # trading-engine@%, denied on appdb, "mysql: OK"
 kubectl -n axon-trader logs job/backing-services-check -c rabbitmq # 100 messages sent and consumed
 ```
 
@@ -82,5 +83,7 @@ The managed certificate is issued only after the hostname resolves to the Gatewa
 `scripts/kind-check.sh` runs the same RabbitMQ and debug-Job components on a throwaway kind cluster.
 A fake-provider `SecretStore` named `gcp-sm-trading-engine` serves freshly generated passwords under
 the Secret Manager ids (`trading-engine-db-password`, `rabbitmq-password`), and a MySQL 8.0
-Deployment with the Terraform databases and users stands in for Cloud SQL (no Auth Proxy). Needs
+Deployment with the Terraform databases and users stands in for Cloud SQL (no Auth Proxy). Its users
+start with a `cloudsqlsuperuser` role like Cloud SQL's, and the script runs `scripts/cloudsql-grants.sh`
+before the debug Job. Passwords are kept in the `kind-check-credentials` Secret, so a kept cluster reuses them. Needs
 kind, kubectl, kustomize, helm and openssl; `KEEP_CLUSTER=1` keeps the cluster for inspection.

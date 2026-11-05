@@ -80,12 +80,17 @@ spec:
                 [ "${i}" -lt 60 ] || { echo "mysql: unreachable"; exit 1; }
                 sleep 5
               done
+              # Temporary table: gone with the connection, so an interrupted run leaves nothing behind.
               mysql --connect-timeout=10 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${MYSQL_DATABASE}" -e "
                 SELECT CURRENT_USER() AS user, DATABASE() AS db, VERSION() AS version;
-                CREATE TABLE backing_services_check (id INT PRIMARY KEY);
+                CREATE TEMPORARY TABLE backing_services_check (id INT PRIMARY KEY);
                 INSERT INTO backing_services_check VALUES (1);
-                SELECT COUNT(*) AS rows_written FROM backing_services_check;
-                DROP TABLE backing_services_check;"
+                SELECT COUNT(*) AS rows_written FROM backing_services_check;"
+              # Each workload user must be confined to its own database (scripts/cloudsql-grants.sh).
+              if mysql --connect-timeout=10 -h "${MYSQL_HOST}" -u "${MYSQL_USER}" "${OTHER_DATABASE}" -e "SELECT 1" >/dev/null 2>&1; then
+                echo "mysql: ${MYSQL_USER} can open ${OTHER_DATABASE}; run scripts/cloudsql-grants.sh"; exit 1
+              fi
+              echo "mysql: ${MYSQL_USER} denied on ${OTHER_DATABASE}"
               echo "mysql: OK"
           env:
             - name: MYSQL_HOST
@@ -94,6 +99,8 @@ spec:
               value: trading-engine
             - name: MYSQL_DATABASE
               value: enginedb
+            - name: OTHER_DATABASE
+              value: appdb
             - name: MYSQL_PWD
               valueFrom:
                 secretKeyRef:

@@ -33,17 +33,26 @@ kubectl -n rabbitmq-system rollout status deploy/rabbitmq-cluster-operator --tim
 
 echo "==> generated credentials (never written to the repo)"
 kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-gen() { openssl rand -hex 16; }
-root_pw="$(gen)" app_pw="$(gen)" engine_pw="$(gen)" rabbit_pw="$(gen)"
+# Reused on a kept cluster: the MySQL users and the RabbitMQ user already exist with these passwords.
+if ! kubectl -n "${ns}" get secret kind-check-credentials >/dev/null 2>&1; then
+  gen() { openssl rand -hex 16; }
+  kubectl -n "${ns}" create secret generic kind-check-credentials \
+    --from-literal=root="$(gen)" --from-literal=app="$(gen)" \
+    --from-literal=engine="$(gen)" --from-literal=rabbit="$(gen)" >/dev/null
+fi
+cred() { kubectl -n "${ns}" get secret kind-check-credentials -o jsonpath="{.data.$1}" | base64 -d; }
+root_pw="$(cred root)" app_pw="$(cred app)" engine_pw="$(cred engine)" rabbit_pw="$(cred rabbit)"
+# Users get a cloudsqlsuperuser role like the ones Cloud SQL creates; scripts/cloudsql-grants.sh narrows them.
 kubectl -n "${ns}" create secret generic mysql-standin \
   --from-literal=root-password="${root_pw}" \
   --from-literal=init.sql="
 CREATE DATABASE appdb CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
 CREATE DATABASE enginedb CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
-CREATE USER 'trader-app'@'%' IDENTIFIED BY '${app_pw}';
-CREATE USER 'trading-engine'@'%' IDENTIFIED BY '${engine_pw}';
-GRANT ALL PRIVILEGES ON appdb.* TO 'trader-app'@'%';
-GRANT ALL PRIVILEGES ON enginedb.* TO 'trading-engine'@'%';" \
+CREATE ROLE cloudsqlsuperuser;
+GRANT ALL PRIVILEGES ON *.* TO cloudsqlsuperuser;
+CREATE USER 'trader-app'@'%' IDENTIFIED BY '${app_pw}' DEFAULT ROLE cloudsqlsuperuser;
+CREATE USER 'trading-engine'@'%' IDENTIFIED BY '${engine_pw}' DEFAULT ROLE cloudsqlsuperuser;
+GRANT cloudsqlsuperuser TO 'trader-app'@'%', 'trading-engine'@'%';" \
   --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 # Fake provider in place of Secret Manager, same store name and remote keys as staging.
 kubectl apply -f - >/dev/null <<YAML
@@ -72,6 +81,12 @@ done
 kubectl -n "${ns}" wait --for=condition=Ready externalsecret --all --timeout=120s
 kubectl -n "${ns}" rollout status deploy/mysql-standin --timeout=300s
 kubectl -n "${ns}" wait --for=condition=AllReplicasReady rabbitmqcluster/rabbitmq --timeout=600s
+
+echo "==> scripts/cloudsql-grants.sh against the stand-in"
+MYSQL_HOST=mysql-standin MYSQL_ADMIN_PASSWORD="${root_pw}" NAMESPACE="${ns}" "${root}/scripts/cloudsql-grants.sh"
+# Re-run the debug Job from scratch now that the grants are in place (also drops a Job from an earlier run).
+kubectl -n "${ns}" delete job backing-services-check --ignore-not-found --wait
+kubectl apply --server-side -k "${root}/local/kind" >/dev/null
 
 echo "==> debug Job backing-services-check"
 if ! kubectl -n "${ns}" wait --for=condition=complete job/backing-services-check --timeout=300s; then
