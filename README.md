@@ -208,7 +208,7 @@ SPRING_PROFILES_ACTIVE=local java -jar trader-app/target/trader-app.jar
 ci/local/verify-local.sh
 ```
 
-`ci/local/verify-local.sh` waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
+The backends bind to `127.0.0.1` only (the local profile has no auth in front of the trading API; set `ESARCH_BIND_ADDRESS` to change it). `ci/local/verify-local.sh` exits non-zero if newman, the e2e script or the portfolio check fails. It waits until trader-app can route commands to trading-engine and loads the demo data through `/actuator/data-initializer`, so open http://localhost:3000 afterwards to trade in the UI. The local passwords default to throwaway values; override them with `ESARCH_MYSQL_USER`, `ESARCH_MYSQL_PASSWORD`, `ESARCH_MYSQL_ROOT_PASSWORD`, `ESARCH_RABBITMQ_USER` and `ESARCH_RABBITMQ_PASSWORD` (set the same values for Compose and the apps). Schemas use `ddl-auto=update`, as on TAS, so data survives restarts; `docker compose down -v` wipes it.
 
 ## CQRS & Event Sourcing Architectural Overview
 
