@@ -130,7 +130,8 @@ jobs:
             */rolled-back-to-*) state="helm rolled back to revision ${RESULT#rolled-back-to-}" ;;
             */rollback-failed) state="helm rollback FAILED, staging needs a look" ;;
             */no-rollback) state="no earlier revision to roll back to" ;;
-            *) state="failed before the helm upgrade, staging unchanged" ;;
+            */not-deployed | skipped/*) state="failed before the helm upgrade, staging unchanged" ;;
+            *) state="deploy step died ($OUTCOME), staging state unknown" ;;
           esac
           [ "$OUTCOME" = success ] || text="<!here> *FAILED* :x: Staging deploy of \`${IMAGE_TAG:0:7}\` ($state): <$RUN_URL|run>"
           jq -n --arg text "$text" '{text: $text}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL" >/dev/null
