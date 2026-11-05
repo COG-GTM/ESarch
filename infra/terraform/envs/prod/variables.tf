@@ -79,6 +79,12 @@ variable "ci_allowed_refs" {
   default     = []
 }
 
+variable "ci_allowed_environments" {
+  description = "GitHub environments whose jobs may authenticate; production keeps the deploy-prod.yml approval gate in front of every prod token."
+  type        = list(string)
+  default     = ["production"]
+}
+
 variable "gke_master_ipv4_cidr_block" {
   description = "/28 control plane range of the GKE cluster (must not overlap the VPC ranges)."
   type        = string

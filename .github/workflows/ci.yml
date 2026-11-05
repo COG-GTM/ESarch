@@ -244,3 +244,18 @@ jobs:
       image-tag: ${{ github.sha }}
       image-digests: ${{ needs.publish.outputs.digests }}
     secrets: inherit
+
+  deploy-prod:
+    name: Promote to production (approval)
+    needs: [publish, deploy-staging]
+    if: needs.deploy-staging.outputs.result == 'deployed'
+    permissions:
+      contents: read
+      id-token: write
+      actions: read
+    uses: ./.github/workflows/deploy-prod.yml
+    with:
+      image-tag: ${{ github.sha }}
+      image-digests: ${{ needs.publish.outputs.digests }}
+    secrets:
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

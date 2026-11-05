@@ -105,6 +105,7 @@ module "ci_workload_identity" {
   github_repository_id       = var.github_repository_id
   github_repository_owner_id = var.github_repository_owner_id
   allowed_refs               = var.ci_allowed_refs
+  allowed_environments       = var.ci_allowed_environments
   ci_service_account_name    = module.service_accounts.names["ci-deployer"]
 
   depends_on = [module.project_services]

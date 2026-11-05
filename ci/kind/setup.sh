@@ -2,7 +2,7 @@
 # kind_setup: kind cluster, local images, throwaway Secrets, the MySQL/RabbitMQ stand-ins (ci/kind/kustomization.yaml),
 # then `helm upgrade --install` of deploy/helm/axon-trader with ci/kind/values-kind.yaml. With ESARCH_KIND_GATEWAY=1
 # it also installs Envoy Gateway and renders the chart's Gateway + HTTPRoute (ci/kind/values-kind-gateway.yaml).
-# ESARCH_HELM_ARGS adds extra helm flags (word-split), e.g. --set trading-engine.replicaCount=2.
+# KIND_CONFIG is an optional kind cluster config file. ESARCH_HELM_ARGS adds extra helm flags (word-split), e.g. --set trading-engine.replicaCount=2.
 # The passwords are generated per run and only ever live in the cluster. Never touches GCP or TAS.
 ENVOY_GATEWAY_VERSION=${ENVOY_GATEWAY_VERSION:-v1.5.4}
 KIND_IMAGES="esarch/discovery-server:latest esarch/trader-app:latest esarch/trading-engine:latest esarch/trader-ui:latest
@@ -10,7 +10,7 @@ KIND_IMAGES="esarch/discovery-server:latest esarch/trader-app:latest esarch/trad
 
 kind_cluster() {
   echo "== kind cluster '$CLUSTER', images, namespace and throwaway secrets"
-  kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" --wait 120s
+  kind get clusters 2>/dev/null | grep -qx "$CLUSTER" || kind create cluster --name "$CLUSTER" ${KIND_CONFIG:+--config "$KIND_CONFIG"} --wait 120s
   local img
   for img in $KIND_IMAGES; do
     docker image inspect "$img" >/dev/null 2>&1 || docker pull -q "$img"

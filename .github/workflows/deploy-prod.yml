@@ -1,0 +1,230 @@
+name: deploy-prod
+
+# Promotes a release that passed staging to the production GKE cluster behind the `production` GitHub environment
+# (s4.3, replaces the Concourse prod deploy). No rebuild: the exact image digests staging deployed are copied from the
+# staging to the production Artifact Registry (ci/deploy/promote-images.sh, skopeo copy --preserve-digests), then
+# ci/deploy/helm-deploy.sh runs helm upgrade --install with values-prod.yaml and those digests, waits for the rollouts,
+# runs the Postman smoke (newman) + ci/tasks/e2e-test-both-sides.sh against prod and helm-rolls back on any failure.
+# Proved offline by ci/kind/verify-prod-promotion.sh. Release and manual rollback procedure: docs/deploy-gke.md.
+#
+# Called by ci.yml once deploy-staging passes on master; workflow_dispatch promotes the staging-release artifact of an
+# earlier master run (e.g. to re-promote a previous release). The promote job waits for the required reviewers of the
+# `production` environment (create it with required reviewers and a `master` deployment branch policy).
+# Skipped with a notice until these repository variables are set (terraform outputs of infra/terraform/envs/prod):
+#   PROD_GCP_WORKLOAD_IDENTITY_PROVIDER  ci_workload_identity_provider (pool restricted to master + `production`)
+#   PROD_GCP_CI_SERVICE_ACCOUNT          ci_service_account (roles/container.developer, Artifact Registry writer)
+#   PROD_GCP_ARTIFACT_REGISTRY           artifact_registry_url
+#   PROD_GKE_CLUSTER                     projects/<project>/locations/<gke_cluster_location>/clusters/<gke_cluster_name>
+# and then needs:
+#   PROD_CLOUDSQL_INSTANCE_CONNECTION_NAME  cloudsql_instance_connection_name
+#   PROD_CLOUDSQL_PSA_CIDR                  private services access range of the Cloud SQL instance
+#   PROD_URL                                https://<prod host> served by the platform Gateway (gateway_address)
+# plus the staging GCP_* variables (deploy-staging.yml) to read the staging images. Google auth is Workload Identity
+# Federation only. Optional secret SLACK_WEBHOOK_URL.
+
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        description: Git SHA the images were tagged with
+        type: string
+        required: true
+      image-digests:
+        description: 'JSON {"<service>": "sha256:..."} that deploy-staging just deployed'
+        type: string
+        required: true
+    secrets:
+      SLACK_WEBHOOK_URL:
+        required: false
+  workflow_dispatch:
+    inputs:
+      staging-run-id:
+        description: Id of a master ci/deploy-staging run whose staging deploy passed (its staging-release artifact is promoted)
+        type: string
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Staging-verified release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      enabled: ${{ steps.config.outputs.enabled }}
+      image-tag: ${{ steps.release.outputs.image-tag }}
+      image-digests: ${{ steps.release.outputs.image-digests }}
+    env:
+      WIF_PROVIDER: ${{ vars.PROD_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      CI_SERVICE_ACCOUNT: ${{ vars.PROD_GCP_CI_SERVICE_ACCOUNT }}
+      REGISTRY: ${{ vars.PROD_GCP_ARTIFACT_REGISTRY }}
+      GKE_CLUSTER: ${{ vars.PROD_GKE_CLUSTER }}
+      CLOUDSQL_INSTANCE: ${{ vars.PROD_CLOUDSQL_INSTANCE_CONNECTION_NAME }}
+      CLOUDSQL_PSA_CIDR: ${{ vars.PROD_CLOUDSQL_PSA_CIDR }}
+      PROD_URL: ${{ vars.PROD_URL }}
+      STAGING_WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      STAGING_CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+      STAGING_REGISTRY: ${{ vars.GCP_ARTIFACT_REGISTRY }}
+    steps:
+      - name: Check the GCP variables
+        id: config
+        run: |
+          if [ -n "$WIF_PROVIDER" ] && [ -n "$CI_SERVICE_ACCOUNT" ] && [ -n "$REGISTRY" ] && [ -n "$GKE_CLUSTER" ]; then
+            missing=""
+            for v in CLOUDSQL_INSTANCE CLOUDSQL_PSA_CIDR PROD_URL STAGING_WIF_PROVIDER STAGING_CI_SERVICE_ACCOUNT STAGING_REGISTRY; do
+              [ -n "${!v}" ] || missing="$missing $v"
+            done
+            if [ -n "$missing" ]; then
+              echo "::error::prod promotion needs PROD_CLOUDSQL_INSTANCE_CONNECTION_NAME, PROD_CLOUDSQL_PSA_CIDR, PROD_URL and the staging GCP_* variables (unset:$missing)"
+              exit 1
+            fi
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            msg="Production promotion skipped: set the repository variables PROD_GCP_WORKLOAD_IDENTITY_PROVIDER, PROD_GCP_CI_SERVICE_ACCOUNT, PROD_GCP_ARTIFACT_REGISTRY and PROD_GKE_CLUSTER (terraform outputs of infra/terraform/envs/prod)."
+            echo "::notice::$msg"
+            echo "$msg" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Check the staging run
+        if: steps.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ inputs.staging-run-id }}
+        run: |
+          [[ "$RUN_ID" =~ ^[0-9]+$ ]] || { echo "::error::staging-run-id must be a numeric run id"; exit 1; }
+          branch=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq .head_branch)
+          [ "$branch" = master ] || { echo "::error::run $RUN_ID is on '$branch'; only master releases are promoted"; exit 1; }
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        if: steps.config.outputs.enabled == 'true' && github.event_name == 'workflow_dispatch'
+        with:
+          name: staging-release
+          path: ${{ runner.temp }}/staging-release
+          run-id: ${{ inputs.staging-run-id }}
+          github-token: ${{ github.token }}
+      - name: Release to promote
+        id: release
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          INPUT_TAG: ${{ inputs.image-tag }}
+          INPUT_DIGESTS: ${{ inputs.image-digests }}
+          RELEASE_FILE: ${{ runner.temp }}/staging-release/release.json
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            tag=$(jq -r .image_tag "$RELEASE_FILE"); digests=$(jq -c .image_digests "$RELEASE_FILE")
+          else
+            tag=$INPUT_TAG; digests=$(jq -c . <<<"$INPUT_DIGESTS")
+          fi
+          [[ "$tag" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::image tag '$tag' is not a git SHA"; exit 1; }
+          {
+            echo "### Release waiting for \`production\` approval: \`$tag\`"
+            echo
+            echo "Exact digests that passed staging (promoted to \`$REGISTRY\` without a rebuild):"
+            echo
+            echo "| Image | Digest |"
+            echo "|---|---|"
+          } >> "$GITHUB_STEP_SUMMARY"
+          for s in trading-engine trader-app discovery-server trader-ui; do
+            d=$(jq -r --arg s "$s" '.[$s] // empty' <<<"$digests")
+            [[ "$d" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::no sha256 digest for $s in the release"; exit 1; }
+            echo "| \`$s\` | \`$d\` |" >> "$GITHUB_STEP_SUMMARY"
+          done
+          echo "image-tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "image-digests=$digests" >> "$GITHUB_OUTPUT"
+
+  promote:
+    name: Promote digests + helm upgrade + smoke + e2e (rollback on failure)
+    needs: release
+    if: needs.release.outputs.enabled == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: production
+      url: ${{ vars.PROD_URL }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      REGISTRY: ${{ vars.PROD_GCP_ARTIFACT_REGISTRY }}
+      STAGING_REGISTRY: ${{ vars.GCP_ARTIFACT_REGISTRY }}
+      CLOUDSQL_INSTANCE: ${{ vars.PROD_CLOUDSQL_INSTANCE_CONNECTION_NAME }}
+      CLOUDSQL_PSA_CIDR: ${{ vars.PROD_CLOUDSQL_PSA_CIDR }}
+      PROD_URL: ${{ vars.PROD_URL }}
+      IMAGE_TAG: ${{ needs.release.outputs.image-tag }}
+      IMAGE_DIGESTS: ${{ needs.release.outputs.image-digests }}
+    steps:
+      # The chart and values of the release itself, as staging deployed them.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.release.outputs.image-tag }}
+          persist-credentials: false
+      - name: Staging registry token (Workload Identity Federation)
+        id: staging-auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
+          token_format: access_token
+          create_credentials_file: false
+      - name: Authenticate to the production project (Workload Identity Federation)
+        id: auth
+        uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.PROD_GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.PROD_GCP_CI_SERVICE_ACCOUNT }}
+          token_format: access_token
+      - name: Promote the staging digests (no rebuild)
+        env:
+          SOURCE_TOKEN: ${{ steps.staging-auth.outputs.access_token }}
+          TARGET_TOKEN: ${{ steps.auth.outputs.access_token }}
+        run: SOURCE_REGISTRY="$STAGING_REGISTRY" TARGET_REGISTRY="$REGISTRY" bash ci/deploy/promote-images.sh
+      - name: GKE credentials
+        uses: google-github-actions/get-gke-credentials@64bc7249bbcf78056bb92f14d3cedc2da193946c # v2.3.5
+        with:
+          cluster_name: ${{ vars.PROD_GKE_CLUSTER }}
+      - name: Deploy, smoke, e2e (helm rollback on failure)
+        id: deploy
+        env:
+          SMOKE_LOGS: ${{ runner.temp }}/smoke
+        run: |
+          IMAGE_REGISTRY="$REGISTRY" PUBLIC_URL="$PROD_URL" bash ci/deploy/helm-deploy.sh \
+            -f deploy/helm/axon-trader/values-prod.yaml \
+            --set "trading-engine.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
+            --set "trader-app.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
+            --set "networkPolicy.mysql.peers[0].ipBlock.cidr=$CLOUDSQL_PSA_CIDR"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: prod-smoke
+          path: ${{ runner.temp }}/smoke
+          if-no-files-found: ignore
+      - name: Slack
+        if: always()
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          OUTCOME: ${{ steps.deploy.outcome }}
+          RESULT: ${{ steps.deploy.outputs.result }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo "::notice::Slack notification skipped: set the repository secret SLACK_WEBHOOK_URL."
+            exit 0
+          fi
+          case "$OUTCOME/$RESULT" in
+            success/*) text=":white_check_mark: Production promotion of \`${IMAGE_TAG:0:7}\` _passed_ (staging digests, helm upgrade, smoke, e2e): <$RUN_URL|run>" ;;
+            */rolled-back-to-*) state="helm rolled back to revision ${RESULT#rolled-back-to-}" ;;
+            */rollback-failed) state="helm rollback FAILED, production needs a look NOW" ;;
+            */no-rollback) state="no earlier revision to roll back to" ;;
+            */not-deployed | skipped/*) state="failed before the helm upgrade, production unchanged" ;;
+            *) state="deploy step died ($OUTCOME), production state unknown" ;;
+          esac
+          [ "$OUTCOME" = success ] || text="<!here> *FAILED* :x: Production promotion of \`${IMAGE_TAG:0:7}\` ($state): <$RUN_URL|run>"
+          jq -n --arg text "$text" '{text: $text}' | curl -fsS -X POST -H 'Content-Type: application/json' --data @- "$SLACK_WEBHOOK_URL" >/dev/null

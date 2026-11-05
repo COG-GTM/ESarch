@@ -150,3 +150,9 @@ variable "ci_allowed_refs" {
   type        = list(string)
   default     = []
 }
+
+variable "ci_allowed_environments" {
+  description = "GitHub environments whose jobs may authenticate from CI. Empty allows any job."
+  type        = list(string)
+  default     = []
+}

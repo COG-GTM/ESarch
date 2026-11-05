@@ -18,6 +18,8 @@ github_repository = "COG-GTM/ESarch"
 github_repository_id       = "REPLACE_WITH_NUMERIC_REPOSITORY_ID"
 github_repository_owner_id = "REPLACE_WITH_NUMERIC_OWNER_ID"
 ci_allowed_refs   = ["refs/heads/master"]
+# Only jobs of the `production` GitHub environment (required reviewers) get prod tokens (.github/workflows/deploy-prod.yml).
+ci_allowed_environments = ["production"]
 
 # GKE Autopilot (regional, private nodes). Add the operator/CI egress CIDRs that run kubectl.
 gke_master_ipv4_cidr_block = "172.16.0.16/28"

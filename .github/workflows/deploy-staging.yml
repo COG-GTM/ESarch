@@ -7,6 +7,8 @@ name: deploy-staging
 # ci/kind/verify-deploy-rollback.sh). Results go to the run summary and to Slack.
 #
 # Called by ci.yml after a master push publishes images; workflow_dispatch redeploys a published tag + digests.
+# A passing deploy uploads the staging-release artifact (tag + digests) that deploy-prod.yml promotes, and returns
+# result=deployed so ci.yml chains the approval-gated production promotion.
 # Skipped with a notice until these repository variables are set (terraform outputs of infra/terraform/envs/staging):
 #   GCP_WORKLOAD_IDENTITY_PROVIDER  ci_workload_identity_provider
 #   GCP_CI_SERVICE_ACCOUNT          ci_service_account (roles/container.developer)
@@ -29,6 +31,10 @@ on:
         description: 'JSON {"<service>": "sha256:..."} for trading-engine, trader-app, discovery-server and trader-ui'
         type: string
         required: true
+    outputs:
+      result:
+        description: helm-deploy.sh result (deployed, rolled-back-to-<n>, ...); empty when skipped
+        value: ${{ jobs.deploy.outputs.result }}
   workflow_dispatch:
     inputs:
       image-tag:
@@ -55,6 +61,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      result: ${{ steps.deploy.outputs.result }}
     env:
       WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
       CI_SERVICE_ACCOUNT: ${{ vars.GCP_CI_SERVICE_ACCOUNT }}
@@ -107,6 +115,20 @@ jobs:
             --set "trading-engine.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
             --set "trader-app.cloudSqlProxy.instanceConnectionName=$CLOUDSQL_INSTANCE" \
             --set "networkPolicy.mysql.peers[0].ipBlock.cidr=$CLOUDSQL_PSA_CIDR"
+      - name: Record the staging-verified release
+        if: steps.deploy.outputs.result == 'deployed'
+        env:
+          RELEASE_DIR: ${{ runner.temp }}/staging-release
+        run: |
+          mkdir -p "$RELEASE_DIR"
+          jq -n --arg tag "$IMAGE_TAG" --argjson digests "$IMAGE_DIGESTS" --arg sha "$GITHUB_SHA" --arg run "$GITHUB_RUN_ID" \
+            '{image_tag: $tag, image_digests: $digests, git_sha: $sha, staging_run_id: $run}' > "$RELEASE_DIR/release.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: steps.deploy.outputs.result == 'deployed'
+        with:
+          name: staging-release
+          path: ${{ runner.temp }}/staging-release/release.json
+          retention-days: 90
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always() && steps.config.outputs.enabled == 'true'
         with:

@@ -56,6 +56,12 @@ variable "allowed_refs" {
   default     = []
 }
 
+variable "allowed_environments" {
+  description = "GitHub environments (e.g. production) whose jobs may authenticate; their protection rules (required reviewers) then gate every token. Empty allows any job."
+  type        = list(string)
+  default     = []
+}
+
 variable "ci_service_account_name" {
   description = "Resource name (projects/<p>/serviceAccounts/<email>) of the service account CI impersonates."
   type        = string

@@ -235,7 +235,7 @@ On `master` the scanned images are pushed to Artifact Registry through Workload 
 | `GCP_CI_SERVICE_ACCOUNT` | `ci_service_account` | `ci-publisher@my-project.iam.gserviceaccount.com` |
 | `GCP_ARTIFACT_REGISTRY` | `artifact_registry_url` | `europe-west1-docker.pkg.dev/my-project/esarch` |
 
-The pushed digests are listed in the publish job summary. The Concourse pipeline (`ci/pipeline.yml`) still exists alongside it.
+The pushed digests are listed in the publish job summary. They are then deployed to staging and, behind the `production` environment approval, promoted to production without a rebuild: see [docs/deploy-gke.md](docs/deploy-gke.md) for the release, rollback (`helm rollback`, previous digest) and local `kind` workflow. The Concourse pipeline (`ci/pipeline.yml`) still exists alongside it.
 
 ## CQRS & Event Sourcing Architectural Overview
 
