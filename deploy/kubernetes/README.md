@@ -15,6 +15,26 @@ The connection properties have no defaults in the profile: a missing variable st
 falling back to the embedded H2 database. The `DB_HOST`, `DB_USER` and `RABBITMQ_HOST` values in the ConfigMaps are
 placeholders for the Helm chart (s3.5).
 
+## Command routing (Eureka)
+
+Axon's `DistributedCommandBus` (`axon-distributed-commandbus-springcloud` 3.3.3) routes each command to one pod with
+a consistent-hash ring built from Spring Cloud DiscoveryClient instances; every pod publishes its command-handling
+capabilities in its own instance metadata. On TAS the registry was the SCS Service Registry (`p-service-registry`).
+On Kubernetes it is the repo's own Eureka, `discovery-server` (s3.3 decision, mapping OPEN-5 option A), so routing
+works unchanged with `axon.distributed.spring-cloud.fallback-to-http-get=false`:
+
+- `discovery-server/`: Deployment (one replica, `Recreate`), ClusterIP Service `discovery-server:8761` and the
+  NetworkPolicies Axon needs on top of the platform's default-deny-ingress (apps -> Eureka on 8761, app pod -> app pod
+  on 8080 for `/spring-command-bus-connector/command`). The Helm chart (s3.5) takes these over and sets the image.
+- Both apps use `spring-cloud-starter-netflix-eureka-client` (the SCS registry starter and BOM are gone), register
+  their pod IP (`eureka.instance.prefer-ip-address=true`) at `EUREKA_DEFAULT_ZONE`, renew every 5 s and expire after
+  15 s; `discovery-server` runs with self-preservation off, a 5 s eviction pass and no read-only response cache. A pod
+  that shuts down cleanly deregisters at once; a crashed pod leaves every ring within about 20-25 s, during which
+  commands routed to it fail rather than run twice.
+
+`ci/kind/verify-axon-routing.sh` proves it on kind: two replicas of each app, buy/sell orders handled exactly once,
+and routing that survives killing a trading-engine pod.
+
 ## Schema
 
 Flyway owns both schemas (`<app>/src/main/resources/db/migration`, `V1__baseline_schema.sql` generated from the
