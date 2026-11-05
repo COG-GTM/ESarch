@@ -87,12 +87,13 @@ run "prod_ref_restriction_and_ksa_bindings" {
   variables {
     environment                           = "prod"
     ci_allowed_refs                       = ["refs/heads/master"]
+    ci_allowed_environments               = ["production"]
     enable_gke_workload_identity_bindings = true
   }
 
   assert {
-    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch' && assertion.repository_id == '1340826081' && assertion.repository_owner_id == '211054393' && assertion.ref in ['refs/heads/master']"
-    error_message = "Ref restriction missing from the WIF attribute condition."
+    condition     = module.ci_workload_identity.attribute_condition == "assertion.repository == 'COG-GTM/ESarch' && assertion.repository_id == '1340826081' && assertion.repository_owner_id == '211054393' && assertion.ref in ['refs/heads/master'] && assertion.environment in ['production']"
+    error_message = "Ref or production environment restriction missing from the WIF attribute condition."
   }
 
   assert {

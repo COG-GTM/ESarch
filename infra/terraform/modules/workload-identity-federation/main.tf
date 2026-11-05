@@ -10,6 +10,10 @@ locals {
       "assertion.ref in [%s]",
       join(", ", [for r in var.allowed_refs : format("'%s'", r)])
     )],
+    length(var.allowed_environments) == 0 ? [] : [format(
+      "assertion.environment in [%s]",
+      join(", ", [for e in var.allowed_environments : format("'%s'", e)])
+    )],
   )
 }
 
@@ -35,7 +39,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.ref"                 = "assertion.ref"
   }
 
-  # Only tokens minted for this repository (and, if set, these refs) can be exchanged at all.
+  # Only tokens minted for this repository (and, if set, these refs and GitHub environments) can be exchanged at all.
   attribute_condition = join(" && ", local.conditions)
 
   oidc {

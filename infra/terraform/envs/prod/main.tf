@@ -24,6 +24,7 @@ module "foundation" {
   github_repository_id       = var.github_repository_id
   github_repository_owner_id = var.github_repository_owner_id
   ci_allowed_refs            = var.ci_allowed_refs
+  ci_allowed_environments    = var.ci_allowed_environments
 }
 
 module "gke" {
