@@ -18,8 +18,11 @@ package io.pivotal.refarch.cqrs.trader.app.query.orders.transaction;
 
 import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
+import javax.persistence.Index;
+import javax.persistence.Table;
 
 @Entity
+@Table(indexes = @Index(name = "idx_trade_executed_view_order_book_id", columnList = "orderBookId"))
 public class TradeExecutedView {
 
     @javax.persistence.Id
